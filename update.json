@@ -1,20 +1,119 @@
 {
-  "_说明": "悬浮球在线更新的索引文件。file 相对仓库根；也可以填完整 http(s) 地址。少写哪条通道，悬浮球里那条就会灰掉（不用三个文件凑齐）。",
-  "_readme_base": "https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
-  "preset": {
+ "_说明": "悬浮球在线更新的索引文件。file 相对仓库根；也可以填完整 http(s) 地址。少写哪条通道，悬浮球里那条就会灰掉。history＝全部历史版本（最新的在最上面），老版本的脚本归档在 archive/ 下，可以直接选它更新（回退）。",
+ "_readme_base": "https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
+ "preset": {
+  "version": "v2.0",
+  "file": "preset/preset-v2.0.json",
+  "changelog": [
+   "首次发布：预设本体 + 悬浮球脚本"
+  ]
+ },
+ "script": {
+  "version": "v1.4",
+  "file": "script/orb.js",
+  "changelog": [
+   "【新】更新时能挑版本了：弹窗里列出全部历史版本，最新的在最上面默认展开，老版本折叠着，点开能看到那版的更新说明，也能直接选它来更新（想退回旧版就选它）",
+   "【修】夜间模式下还有几处亮斑：更新弹窗的红色告警条、合并清单里「新增」「删除」两格，底色也是写死的，现在全部跟随主题",
+   "【协调】绿 / 红 / 金三套辅助色统一走主题变量，日和夜两套配色完全对齐"
+  ]
+ },
+ "history": [
+  {
+   "tag": "v2.0-orb1.4",
+   "date": "2026-10-11",
+   "latest": true,
+   "preset": {
     "version": "v2.0",
-    "file": "preset/preset-v2.0.json",
-    "changelog": [
-      "首次发布：预设本体 + 悬浮球脚本"
-    ]
+    "file": "preset/preset-v2.0.json"
+   },
+   "script": {
+    "version": "v1.4",
+    "file": "script/orb.js"
+   },
+   "changelog": [
+    "【新】更新时能挑版本了：弹窗里列出全部历史版本，最新的在最上面默认展开，老版本折叠着，点开能看到那版的更新说明，也能直接选它来更新（想退回旧版就选它）",
+    "【修】夜间模式下还有几处亮斑：更新弹窗的红色告警条、合并清单里「新增」「删除」两格，底色也是写死的，现在全部跟随主题",
+    "【协调】绿 / 红 / 金三套辅助色统一走主题变量，日和夜两套配色完全对齐"
+   ],
+   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.0-orb1.4"
   },
-  "script": {
+  {
+   "tag": "v2.0-orb1.3",
+   "date": "2026-10-11",
+   "latest": false,
+   "preset": {
+    "version": "v2.0",
+    "file": "preset/preset-v2.0.json"
+   },
+   "script": {
+    "version": "v1.3",
+    "file": "archive/orb-v1.3.js"
+   },
+   "changelog": [
+    "【界面】条目按用途分成 13 组，点组名展开 / 收起；组头直接显示「组里开了几条」。分组只影响显示，预设里条目的顺序一个都没动",
+    "【界面】手机上不再撑满屏幕：检测到手机才自动进紧凑模式（头图压小、行距收紧），电脑完全保持原样；首次安装会让你自己选手机版 / 电脑版，之后点面板右上角「?」随时能改",
+    "【界面】头图保留（只是手机上压小，不再隐藏）",
+    "【修】夜间模式下「不可逆」那块还是白底：底色写死了 #fff6f6→#fff，现在改成跟随主题变量",
+    "【界面】自己加的条目也能分组：编辑条目里有「分组」下拉，还能选「＋ 新建分组…」；分组管理按钮在条目区底部",
+    "【安全】拖动排序只在本组内生效，不会打乱别的组；写回预设的顺序不变"
+   ],
+   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.0-orb1.3"
+  },
+  {
+   "tag": "v2.0-orb1.2",
+   "date": "2026-10-11",
+   "latest": false,
+   "preset": {
+    "version": "v2.0",
+    "file": "preset/preset-v2.0.json"
+   },
+   "script": {
     "version": "v1.2",
-    "file": "script/orb.js",
-    "changelog": [
-      "【重要修复】点「写入预设」后「✼ 历史」退化成普通条目、对话上下文不再发给 AI：以前写回时只留 name/role/content/enabled 就整体重建 prompts，把 identifier / marker / system_prompt / injection_* / attach_* 全清掉了。现在改成就地改字段，其余原样保留",
-      "修：写回后排序表里的 identifier 找不到对应条目（排序失效）",
-      "补：新增 _smoke_save 测试（26 项）守住这条，防止复发"
-    ]
+    "file": "archive/orb-v1.2.js"
+   },
+   "changelog": [
+    "【重要修复】点「写入预设」后「✼ 历史」退化成普通条目、对话上下文不再发给 AI：以前写回时只留 name/role/content/enabled 就整体重建 prompts，把 identifier / marker / system_prompt / injection_* / attach_* 全清掉了。现在改成就地改字段，其余原样保留",
+    "修：写回后排序表里的 identifier 找不到对应条目（排序失效）",
+    "补：新增保存测试（26 项）守住这条，防止复发"
+   ],
+   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.0-orb1.2"
+  },
+  {
+   "tag": "v2.0-orb1.1",
+   "date": "2026-10-10",
+   "latest": false,
+   "preset": {
+    "version": "v2.0",
+    "file": "preset/preset-v2.0.json"
+   },
+   "script": {
+    "version": "v1.1",
+    "file": "archive/orb-v1.1.js"
+   },
+   "changelog": [
+    "修：补丁删条目时排序表残留",
+    "补：rename / order 同步",
+    "补：只发单通道时保留另一条通道的版本号",
+    "新增：开发者手册"
+   ],
+   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.0-orb1.1"
+  },
+  {
+   "tag": "v2.0-orb1.0",
+   "date": "2026-10-10",
+   "latest": false,
+   "preset": {
+    "version": "v2.0",
+    "file": "preset/preset-v2.0.json"
+   },
+   "script": {
+    "version": "v1.0",
+    "file": "archive/orb-v1.0.js"
+   },
+   "changelog": [
+    "首次发布：《斯德哥尔摩症》预设 v2.0 + 悬浮球脚本 v1.0"
+   ],
+   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.0-orb1.0"
   }
+ ]
 }
