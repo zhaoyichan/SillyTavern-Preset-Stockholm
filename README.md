@@ -26,7 +26,7 @@ tools/ai_patch.py                 合并 AI 补丁 + 发版
   "preset": { "version": "v2.0",
               "file": "preset/preset-v2.0.json",
               "changelog": ["这里写这次改了什么"] },
-  "script": { "version": "v1.0",
+  "script": { "version": "v1.1",
               "file": "script/orb.js",
               "changelog": ["脚本改了什么"] }
 }
@@ -71,6 +71,10 @@ python make_repo.py                                          # 两个都发
 直接选本地的 `.json` / `.js` 就行，流程和在线更新一样（预设仍是按条目合并，先给清单再写入）。
 
 ## 用 AI（DeepSeek）写预设：增量补丁流程
+
+> 📘 **要完整规则（版本号怎么定、仓库怎么传、发布清单、禁忌）看这份：
+> [`开发者手册_给AI.md`](开发者手册_给AI.md)。**
+> 下面只是"让 AI 产补丁"的 3 步速查。
 
 预设 67 条、正文 2.5 万字，**别让 AI 每次把整个预设吐一遍**——又慢又容易在某条里塞省略号。
 正确做法是让它只输出「这次改了哪几条」的**补丁**：

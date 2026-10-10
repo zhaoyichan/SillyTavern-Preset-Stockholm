@@ -802,9 +802,29 @@ function __skMerge(remote, local){
     out.push(JSON.parse(JSON.stringify(l))); st.kept++;
   });
 
+  /* rename：只改名不换正文（from 可以写 identifier 也可以写名字）
+     注意：你在本地改过的名字会覆盖这个改名 —— 那是你的东西，不抢 */
+  (remote.rename||[]).forEach(function(rn){
+    if(!rn||!rn.from||!rn.to) return;
+    out.forEach(function(it){
+      if(it.identifier===rn.from || it.name===rn.from) it.name=rn.to;
+    });
+  });
+
   /* 排序表：远端有就照远端，然后把你自定义的 identifier 补进每个 block 的末尾 */
   var order=null;
-  if(Array.isArray(remote.prompt_order) && remote.prompt_order.length){
+  if(Array.isArray(remote.order) && remote.order.length){
+    /* 补丁给了完整顺序：按它重排，没提到的排后面（与 tools/ai_patch.py 行为一致） */
+    var have={}; out.forEach(function(it){ if(it.identifier) have[it.identifier]=it; });
+    var seq=[]; remote.order.forEach(function(id){ if(have[id]) seq.push(id); });
+    out.forEach(function(it){ if(it.identifier && seq.indexOf(it.identifier)<0) seq.push(it.identifier); });
+    var blocks=(Array.isArray(remote.prompt_order)&&remote.prompt_order.length)?remote.prompt_order:local.prompt_order;
+    order=(blocks||[]).map(function(b){
+      return {character_id:(b&&b.character_id!==undefined)?b.character_id:100001,
+              order:seq.map(function(id){
+                return {enabled:!!have[id].enabled, identifier:id};})};
+    });
+  }else if(Array.isArray(remote.prompt_order) && remote.prompt_order.length){
     order=JSON.parse(JSON.stringify(remote.prompt_order));
     var inOrder={};
     order.forEach(function(b){ (b.order||[]).forEach(function(o){ if(o&&o.identifier) inOrder[o.identifier]=1; }); });
@@ -815,8 +835,10 @@ function __skMerge(remote, local){
       b.order=b.order.filter(function(o){ return !(o&&o.identifier&&kill[o.identifier]); });
       extra.forEach(function(it){ b.order.push({enabled:!!it.enabled, identifier:it.identifier}); });
     });
-  } else if(Array.isArray(local.prompt_order) && local.prompt_order.length && st.add){
-    /* 增量补丁没带排序表但新增了条目：必须把新条目补进排序表，否则酒馆里看不到 */
+  } else if(Array.isArray(local.prompt_order) && local.prompt_order.length && (st.add || st.rm)){
+    /* 增量补丁没带排序表，但新增或删除了条目：
+       必须照本地排序表整理一份 —— 新条目要补进去（否则酒馆里看不到），
+       被删的 identifier 要清掉（否则它会一直残留在排序表里）。 */
     order=JSON.parse(JSON.stringify(local.prompt_order));
     var seen={};
     order.forEach(function(b){ (b.order||[]).forEach(function(o){ if(o&&o.identifier) seen[o.identifier]=1; }); });
@@ -1256,9 +1278,9 @@ function claimHtml(){
      "preset": {"version":"v1.9","file":"preset/斯德哥尔摩症_v1.9.json","changelog":["…"]},
      "script": {"version":"v1.0","file":"script/斯德哥尔摩·状态球.js","changelog":["…"]}
    }                                                                        */
-var ORB_VER="v1.0";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
+var ORB_VER="v1.1";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
 var REMOTE = {
-  base:"https://raw.githubusercontent.com/你的账号/斯德哥尔摩/main",
+  base:"https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
   mf:null,          /* 索引 */
   preset:null,      /* 远端预设 JSON */
   script:null,      /* 远端脚本文本 */
