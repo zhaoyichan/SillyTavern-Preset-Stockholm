@@ -1,0 +1,21 @@
+{
+  "_说明": "悬浮球在线更新的索引文件。file 相对仓库根；也可以填完整 http(s) 地址。少写哪条通道，悬浮球里那条就会灰掉（不用三个文件凑齐）。",
+  "_readme_base": "https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
+  "preset": {
+    "version": "v2.0",
+    "file": "preset/preset-v2.0.json",
+    "changelog": [
+      "首次发布：预设本体 + 悬浮球脚本"
+    ]
+  },
+  "script": {
+    "version": "v1.0",
+    "file": "script/orb.js",
+    "changelog": [
+      "删掉两张奥托头像（剩 11 张）",
+      "每轮自动采集（底部「自动」可关）",
+      "更新拆成预设/脚本两条通道，可只发一条",
+      "支持 AI 增量补丁与本地导入文件"
+    ]
+  }
+}
