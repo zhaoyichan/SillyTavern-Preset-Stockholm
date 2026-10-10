@@ -14,6 +14,7 @@ update.json                       索引（唯一入口，改版本就改这里�
 preset/preset-v2.0.json     预设本体（条目 + 正则 + 采样参数）
 script/orb.js          悬浮球脚本本体（整段替换）
 ai/写给AI的提示词.md              复制给 DeepSeek 的编辑指令
+ai/开发者手册_给AI.md           ★ 完整规则：版本号 / 上传格式 / 发布清单 / AI 硬性规则
 ai/patch.template.json            增量补丁模板
 ai/条目索引.md                    67 条清单（identifier / 名称 / 字数，自动生成）
 tools/ai_patch.py                 合并 AI 补丁 + 发版
