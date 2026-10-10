@@ -1,6 +1,3 @@
-/* boot guard */
-(function(){
-  var __boot = function(){
 
 /* 斯德哥尔摩 · 状态球  |  作者 Liwe（李伟）  |  酒馆助手(JS-Slash-Runner) 脚本
    只读正文 <state> 与预设条目，不注入正文、不保存长期记忆。 */
@@ -473,10 +470,14 @@ function loadItems(){
   if(!p||!p.prompts) return false;
   var ln=call("getLoadedPresetName");
   if(ln){ try{ var n=ln.run(); if(n) PRESET.name=n; }catch(e){} }
+  /* ⚠ identifier 必须跟着走。
+     酒馆靠 identifier==="chatHistory" 认「历史」条目、靠它索引排序表；
+     ITEMS 里没有它，写回时就没法把改动贴回原条目，只能整体重建 —— 那就完了。 */
   ITEMS=p.prompts.map(function(x){
     var en=(x.enabled===undefined||x.enabled===null)?null:x.enabled;
     return {name:x.name||"", on:!!x.enabled, def:en,
-            role:x.role||"system", content:x.content||""};
+            role:x.role||"system", content:x.content||"",
+            identifier:(x.identifier===undefined||x.identifier===null)?"":String(x.identifier)};
   });
   return true;
 }
@@ -545,20 +546,52 @@ var HOOK={
     }catch(e){ fallback(); }
   },
 
-  /* 写入：把条目列表的开关/改名/内容写回当前预设 */
+  /* 写入：把条目列表的开关/改名/内容写回当前预设
+     ⚠⚠ 只能「就地改字段」，绝不能整体重建 prompts。
+        整体重建会丢掉 identifier / marker / system_prompt / injection_* / attach_*，
+        后果：酒馆认不出 identifier==="chatHistory" 的历史条目，
+        它退化成普通条目 —— 对话上下文不再发给 AI（血的教训 #12）。
+        只写 name / role / content / enabled 四个用户真正会改的字段，
+        其余一律沿用原条目对象。 */
   save:function(cb){
     var c=call("updatePresetWith");
     if(!c){ cb(false,"找不到 updatePresetWith"); return; }
     try{
-      var snapshot=ITEMS.map(function(it){
-        var o={name:it.name, role:it.role, content:it.content};
-        if(it.def!==null) o.enabled=!!it.on;
-        return o;
-      });
-      var r=c.run("in_use", function(preset){ preset.prompts=snapshot; return preset; }, {render:"immediate"});
-      if(r && r.then) r.then(function(){cb(true,"已写入预设（"+snapshot.length+" 条）");},
+      var n=0;
+      var r=c.run("in_use", function(preset){
+        var src=Array.isArray(preset.prompts)?preset.prompts:[];
+        /* 原条目索引：优先按 identifier，退化按 name（老预设可能没 identifier） */
+        var byId={}, byName={}, i;
+        for(i=0;i<src.length;i++){
+          var q=src[i]; if(!q) continue;
+          if(q.identifier) byId[q.identifier]=q;
+          if(q.name && byName[q.name]===undefined) byName[q.name]=q;
+        }
+        var out=[];
+        for(i=0;i<ITEMS.length;i++){
+          var it=ITEMS[i]; if(!it) continue;
+          var base=(it.identifier && byId[it.identifier]) ||
+                   (it.name && byName[it.name]) || null;
+          if(!base){
+            /* 新增条目：建最简结构，但仍带上 identifier（若已知） */
+            var o={name:it.name, role:it.role, content:it.content};
+            if(it.identifier) o.identifier=it.identifier;
+            if(it.def!==null) o.enabled=!!it.on;
+            out.push(o); continue;
+          }
+          base.name=it.name;
+          base.role=it.role;
+          base.content=it.content;
+          if(it.def!==null) base.enabled=!!it.on;   /* 内置条目不动 enabled */
+          out.push(base); n++;
+        }
+        preset.prompts=out;
+        return preset;
+      }, {render:"immediate"});
+      var msg="已写入预设（"+n+" 条，保留原字段）";
+      if(r && r.then) r.then(function(){cb(true,msg);},
                              function(e){cb(false,"写入失败："+e);});
-      else cb(true,"已写入预设（"+snapshot.length+" 条）");
+      else cb(true,msg);
     }catch(e){ cb(false,"写入失败："+e); }
   },
 
@@ -1278,7 +1311,7 @@ function claimHtml(){
      "preset": {"version":"v1.9","file":"preset/斯德哥尔摩症_v1.9.json","changelog":["…"]},
      "script": {"version":"v1.0","file":"script/斯德哥尔摩·状态球.js","changelog":["…"]}
    }                                                                        */
-var ORB_VER="v1.1";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
+var ORB_VER="v1.2";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
 var REMOTE = {
   base:"https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
   mf:null,          /* 索引 */
@@ -2007,58 +2040,4 @@ dragInit();avatarInit();renderList();updFoot();renderNow(SAMPLE);autoInit();
     try{ localStorage.setItem("sk_orb_missing", __MISS__.join(",")); }catch(e){}
     console.warn("[SK-ORB] 面板里缺少这些元素: " + __MISS__.join(","));
   }
-})();
-
-  };
-  function __fail(e){
-    var msg = (e && e.message) ? e.message : String(e);
-    var stk = String((e && e.stack) || '').slice(0, 900);
-    var txt = '【状态球启动失败】\n' + msg + '\n\n' + stk;
-    /* 1) 丢进酒馆日志（变成未捕获错误，日志里能直接看到类型+消息） */
-    try{ console.error('[SK-ORB] boot failed', e); }catch(_){}
-    try{ setTimeout(function(){ throw new Error('[SK-ORB] ' + msg + ' || ' + stk.replace(/\n/g, ' ~ ')); }, 0); }catch(_){}
-    /* 2) 存 localStorage，方便随时取 */
-    try{ localStorage.setItem('sk_orb_last_error', txt); }catch(_){}
-    /* 3) 常驻错误卡：不会自己消失，带一键复制 */
-    try{
-      var d = (window.parent && window.parent.document) || document;
-      var old = d.getElementById('sk-orb-err');
-      if(old) old.remove();
-      var b = d.createElement('div');
-      b.id = 'sk-orb-err';
-      b.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:2147483000;width:520px;max-height:70vh;overflow:auto;' +
-        'background:#2a0f0f;color:#ffdada;border:1px solid #ff6b6b;border-radius:12px;' +
-        'padding:12px 14px;font:12px/1.65 ui-monospace,Consolas,monospace;' +
-        'box-shadow:0 10px 30px rgba(0,0,0,.55)';
-      var pre = d.createElement('div');
-      pre.style.whiteSpace = 'pre-wrap';
-      pre.textContent = txt;
-      b.appendChild(pre);
-      var row = d.createElement('div');
-      row.style.cssText = 'margin-top:10px;display:flex;gap:8px';
-      var cp = d.createElement('button');
-      cp.textContent = '复制错误信息';
-      cp.style.cssText = 'background:#ff6b6b;color:#2a0f0f;border:0;border-radius:8px;padding:6px 14px;' +
-        'font-weight:700;cursor:pointer;font-size:12px;font-family:inherit';
-      cp.onclick = function(){
-        try{
-          var ta = d.createElement('textarea');
-          ta.value = txt; ta.style.position='fixed'; ta.style.left='-9999px';
-          d.body.appendChild(ta); ta.select();
-          if(d.execCommand) d.execCommand('copy');
-          ta.remove(); cp.textContent = '已复制 ✓';
-        }catch(_){ cp.textContent = '复制失败，请手动选中上面文字'; }
-      };
-      var cl = d.createElement('button');
-      cl.textContent = '关闭';
-      cl.style.cssText = 'background:transparent;color:#ffdada;border:1px solid #ff6b6b;border-radius:8px;' +
-        'padding:6px 14px;cursor:pointer;font-size:12px;font-family:inherit';
-      cl.onclick = function(){ b.remove(); };
-      row.appendChild(cp); row.appendChild(cl);
-      b.appendChild(row);
-      (d.body || d.documentElement).appendChild(b);
-    }catch(_){}
-  }
-  try { __boot(); console.log('[SK-ORB] booted'); }
-  catch(e){ __fail(e); }
 })();
