@@ -9,12 +9,12 @@
     ]
   },
   "script": {
-    "version": "v1.1",
+    "version": "v1.2",
     "file": "script/orb.js",
     "changelog": [
-      "修：增量补丁删条目时排序表没清干净（残留条目）",
-      "补：补丁的 rename / order 字段以前被忽略，现在和 ai_patch.py 一致",
-      "修：只发脚本时不再把预设通道从索引里抹掉"
+      "【重要修复】点「写入预设」后「✼ 历史」退化成普通条目、对话上下文不再发给 AI：以前写回时只留 name/role/content/enabled 就整体重建 prompts，把 identifier / marker / system_prompt / injection_* / attach_* 全清掉了。现在改成就地改字段，其余原样保留",
+      "修：写回后排序表里的 identifier 找不到对应条目（排序失效）",
+      "补：新增 _smoke_save 测试（26 项）守住这条，防止复发"
     ]
   }
 }
