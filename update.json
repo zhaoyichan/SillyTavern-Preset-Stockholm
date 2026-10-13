@@ -5,9 +5,9 @@
   "version": "v2.2",
   "file": "preset/preset-v2.2.json",
   "changelog": [
-   "新增「✹ 同人导演」条目（默认关闭，跟原作角色相关的玩法，开之前先看一眼内容）",
-   "重写 10 条正文：✦ Liwe 本体、✦ 世界逻辑、✷ NPC 主体性、✷ 角色锚、✹ 推演流程、✼ 输出·强制、✹ 缓慢节奏、✹ 世界难度·最高、✹ 同人·简版、✹ 同人·详细版",
-   "这次没有删条目，也没动任何开关"
+   "作者连夜微调（版本号不变，原地覆盖）",
+   "重写 10 条正文：✦ Liwe 本体、✹ 推演流程、✼ 输出·强制、✹ NSFW、Main Prompt、Post-History Instructions、Enhance Definitions、Main Prompt、Post-History Instructions、Enhance Definitions",
+   "开关变化：✹ 同人·简版（关→开）"
   ]
  },
  "script": {
@@ -31,9 +31,9 @@
     "file": "script/orb.js"
    },
    "changelog": [
-    "新增「✹ 同人导演」条目（默认关闭，跟原作角色相关的玩法，开之前先看一眼内容）",
-    "重写 10 条正文：✦ Liwe 本体、✦ 世界逻辑、✷ NPC 主体性、✷ 角色锚、✹ 推演流程、✼ 输出·强制、✹ 缓慢节奏、✹ 世界难度·最高、✹ 同人·简版、✹ 同人·详细版",
-    "这次没有删条目，也没动任何开关",
+    "作者连夜微调（版本号不变，原地覆盖）",
+    "重写 10 条正文：✦ Liwe 本体、✹ 推演流程、✼ 输出·强制、✹ NSFW、Main Prompt、Post-History Instructions、Enhance Definitions、Main Prompt、Post-History Instructions、Enhance Definitions",
+    "开关变化：✹ 同人·简版（关→开）",
     "修：更新完之后，悬浮球面板还是显示旧内容（酒馆自己的界面已经变了，两边读的不是同一份东西）。现在改成直接用写入时返回的新预设刷新面板，拿不到返回值才退回重读，而且会多试几轮等它稳定。另外以前刷新出错是静默吞掉的、界面不动也不吭声，现在会把错误提示出来。注意：脚本更新需要重开一次酒馆才生效。"
    ],
    "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.2-orb2.0"
