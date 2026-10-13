@@ -816,13 +816,18 @@ var HOOK={
         if(r.order) preset.prompt_order = r.order;
         return preset;
       }, {render:"immediate"});
-      var done=function(){
+      /* v2.0：updatePresetWith 返回的就是「更新后的预设」（官方文档保证）。
+         以前写完之后又调 getPreset 重读一遍来刷新面板 —— 读回来的是旧的，
+         界面自然也是旧的（酒馆自己的界面是新的，两边读的不是同一份东西）。
+         现在直接用这个返回值；重读只在拿不到返回值时兜底。 */
+      var done=function(np){
         if(remote.name) PRESET.version=remote.name;
+        var items=__skItemsOf(np) || __skItemsOf(r.prompts);
         cb(true, "已合并更新："+r.st.upd+" 条更新 / "+r.st.add+" 条新增 / "+r.st.kept+" 条新版没有"
-                + (r.st.rm ? (" / "+r.st.rm+" 条删除") : ""));
+                + (r.st.rm ? (" / "+r.st.rm+" 条删除") : ""), items);
       };
       if(w&&w.then) w.then(done, function(e){ cb(false,"写入失败："+e); });
-      else done();
+      else done(null);
     }catch(e){ cb(false,"合并失败："+e); }
   }
 };
@@ -832,6 +837,18 @@ var HOOK={
    规则：匹配上 → 内容/角色用远端（这才是"更新"），开关与改名保留本地
         远端多出来 → 直接新增
         本地多出来 → 原样保留，排在最后（这就是你自己的自定义条目） */
+/* v2.0：把「预设对象」或「原始条目数组」转成面板用的 ITEMS 结构。
+   写入成功后拿它直接刷新面板，省掉一次重读（重读可能读到旧的）。 */
+function __skItemsOf(p){
+  var arr = (!p) ? null : (Array.isArray(p) ? p : (Array.isArray(p.prompts) ? p.prompts : null));
+  if(!arr || !arr.length) return null;
+  return arr.map(function(x){
+    var en=(x.enabled===undefined||x.enabled===null)?null:x.enabled;
+    return {name:x.name||"", on:!!x.enabled, def:en,
+            role:x.role||"system", content:x.content||"",
+            identifier:(x.identifier===undefined||x.identifier===null)?"":String(x.identifier)};
+  });
+}
 function __skKey(p){ return (p && (p.identifier || p.name)) || ""; }
 function __skMaps(lp){
   var byId={}, byName={};
@@ -1627,7 +1644,7 @@ function claimHtml(){
      "preset": {"version":"v1.9","file":"preset/斯德哥尔摩症_v1.9.json","changelog":["…"]},
      "script": {"version":"v1.0","file":"script/斯德哥尔摩·状态球.js","changelog":["…"]}
    }                                                                        */
-var ORB_VER="v1.9";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
+var ORB_VER="v2.0";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
 var REMOTE = {
   base:"https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
   mf:null,          /* 索引 */
@@ -2256,12 +2273,13 @@ function updAutoTick(){
 }
 
 /* 写入：先预设（合并）后脚本（整段替换） */
+var NEWITEMS=null;   /* v2.0：写入成功后回填的新条目，刷新面板时优先用它 */
 function upApply(){
   openUpdate("doing");
   var msgs=[];
   function after(){
     mask.classList.remove("on");
-    try{ loadItems();renderList();updFoot(); }catch(e){}
+    panelRefresh();
     setTimeout(function(){toast(msgs.join(" ／ ")||"没有可更新的内容");},300);
   }
   function doScript(){
@@ -2274,11 +2292,35 @@ function upApply(){
     /* v1.6：预设没有变动就干脆不写，只在结果里说一句「预设没有变动，已跳过」 */
     if(!(REMOTE.want.preset && REMOTE.preset)){ doScript(); return; }
     if(REMOTE.pNoChg){ msgs.push("·  预设没有变动，已跳过（你现在的就是这版）"); doScript(); return; }
-    HOOK.apply(REMOTE.preset, function(ok,msg){
+    HOOK.apply(REMOTE.preset, function(ok,msg,items){
+      if(items && items.length) NEWITEMS=items;   /* v2.0：拿写入的返回值，别再重读 */
       msgs.push((ok?"✓ ":"✗ ")+msg); doScript();
     });
   }
   doPreset();
+}
+/* v2.0：更新完刷新面板。
+   ① 优先用写入返回的新条目 —— 官方文档说 updatePresetWith 的返回值就是「更新后的预设」，
+      比写完之后再调 getPreset 重读可靠。以前就是靠重读，结果面板一直显示旧内容，
+      而酒馆自己的界面是新的：两边读的不是同一份东西。
+   ② 拿不到返回值才退回重读：重读后条目数还在变，说明写入还没同步到读取那一侧，
+      延迟再试几轮（累计约 2.5 秒），等它稳下来再画。
+   ③ 出错要说出来 —— 以前 catch 里是空的，界面不动也不吭声，
+      根本看不出是刷新崩了还是压根没更新。 */
+function panelRefresh(){
+  var paint=function(){
+    try{ renderList();updFoot(); }
+    catch(e){ try{ console&&console.log&&console.log("[orb] 面板刷新出错",e); }catch(_){}
+              try{ toast("面板刷新出错："+e); }catch(_){} }
+  };
+  if(NEWITEMS && NEWITEMS.length){ ITEMS=NEWITEMS; NEWITEMS=null; paint(); return; }
+  var delays=[0,300,700,1500], k=0, last=-1;
+  (function step(){
+    try{ loadItems(); }
+    catch(e){ try{ console&&console.log&&console.log("[orb] 重读预设出错",e); }catch(_){} }
+    if(ITEMS.length!==last && k<delays.length-1){ last=ITEMS.length; k++; setTimeout(step,delays[k]); return; }
+    paint();
+  })();
 }
 Q("btnUp").onclick=function(){openUpdate("check");};
 
