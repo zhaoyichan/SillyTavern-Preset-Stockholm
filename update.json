@@ -5,9 +5,7 @@
   "version": "v2.2",
   "file": "preset/preset-v2.2.json",
   "changelog": [
-   "作者连夜微调（版本号不变，原地覆盖）",
-   "重写 10 条正文：✦ Liwe 本体、✹ 推演流程、✼ 输出·强制、✹ NSFW、Main Prompt、Post-History Instructions、Enhance Definitions、Main Prompt、Post-History Instructions、Enhance Definitions",
-   "开关变化：✹ 同人·简版（关→开）"
+   "工具页换新版式（浅色精致风）"
   ]
  },
  "script": {
@@ -31,9 +29,7 @@
     "file": "script/orb.js"
    },
    "changelog": [
-    "作者连夜微调（版本号不变，原地覆盖）",
-    "重写 10 条正文：✦ Liwe 本体、✹ 推演流程、✼ 输出·强制、✹ NSFW、Main Prompt、Post-History Instructions、Enhance Definitions、Main Prompt、Post-History Instructions、Enhance Definitions",
-    "开关变化：✹ 同人·简版（关→开）",
+    "工具页换新版式（浅色精致风）",
     "脚本更新到 v2.1（本次没有写说明，需要补的话告诉我）"
    ],
    "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.2-orb2.1"
