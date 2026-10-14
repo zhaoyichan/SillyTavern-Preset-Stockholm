@@ -2,39 +2,37 @@
  "_说明": "悬浮球在线更新的索引文件。file 相对仓库根；也可以填完整 http(s) 地址。少写哪条通道，悬浮球里那条就会灰掉。history＝全部历史版本（最新的在最上面），老版本的脚本归档在 archive/ 下，可以直接选它更新（回退）。",
  "_readme_base": "https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
  "preset": {
-  "version": "v2.3",
-  "file": "preset/preset-v2.3.json",
+  "version": "v2.2",
+  "file": "preset/preset-v2.2.json",
   "changelog": [
-   "修改了正则美化",
-   "同人简/详/导演条目添加了原作剧情推进，其实本来就有，不过更强制了"
+   "工具页换新版式（浅色精致风）"
   ]
  },
  "script": {
-  "version": "v2.1",
+  "version": "v2.2",
   "file": "script/orb.js",
   "changelog": [
-   "脚本更新到 v2.1（本次没有写说明，需要补的话告诉我）"
+   "修复手机浏览器：软键盘弹出 / 地址栏收放时悬浮球被顶到屏幕顶上看不见、面板被切掉一截（改用真实可视区定位，键盘弹出后自动归位）"
   ]
  },
  "history": [
   {
-   "tag": "v2.3-orb2.1",
+   "tag": "v2.2-orb2.2",
    "date": "2026-10-14",
    "latest": true,
    "preset": {
-    "version": "v2.3",
-    "file": "preset/preset-v2.3.json"
+    "version": "v2.2",
+    "file": "preset/preset-v2.2.json"
    },
    "script": {
-    "version": "v2.1",
+    "version": "v2.2",
     "file": "script/orb.js"
    },
    "changelog": [
-    "修改了正则美化",
-    "同人简/详/导演条目添加了原作剧情推进，其实本来就有，不过更强制了",
-    "脚本更新到 v2.1（本次没有写说明，需要补的话告诉我）"
+    "工具页换新版式（浅色精致风）",
+    "修复手机浏览器：软键盘弹出 / 地址栏收放时悬浮球被顶到屏幕顶上看不见、面板被切掉一截（改用真实可视区定位，键盘弹出后自动归位）"
    ],
-   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.3-orb2.1"
+   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.2-orb2.2"
   },
   {
    "tag": "v2.2-orb2.1",
@@ -46,7 +44,7 @@
    },
    "script": {
     "version": "v2.1",
-    "file": "script/orb.js"
+    "file": "archive/orb-v2.1.js"
    },
    "changelog": [
     "工具页换新版式（浅色精致风）",

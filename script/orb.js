@@ -1254,6 +1254,62 @@ function vpWin(){
   return window;
 }
 
+/* 真实可视区（v2.2）
+   以前全部按 innerWidth/innerHeight 算，可这两个值在手机浏览器里「不会变」：
+   地址栏收放、软键盘弹出时，屏幕上真正看得见的那一块（visualViewport）变小或上移了，
+   我们却还在按老尺寸定位 —— 于是面板被切掉一截、球被顶到屏幕最上面看不见。
+   网页版酒馆（手机浏览器）反馈的就是这个；TT 是 APK 全屏，键盘行为不同所以没事。
+   ⚠ visualViewport 的坐标是相对 layout viewport 的，fixed 元素也在 layout 坐标系里，
+     所以「现在看得见的范围」= [offsetTop, offsetTop+height]，钳位置时必须带上 offsetTop。 */
+function vpRect(){
+  var W=vpWin();
+  try{
+    var vv=W.visualViewport;
+    if(vv && vv.height>0){
+      return { w:Math.round(vv.width),  h:Math.round(vv.height),
+               top:Math.round(vv.offsetTop||0), left:Math.round(vv.offsetLeft||0) };
+    }
+  }catch(e){}
+  return { w:W.innerWidth||0, h:W.innerHeight||0, top:0, left:0 };
+}
+/* 把已经存下来的球位置，拉回「现在真正看得见」的那一块里（键盘弹出/收起、转屏都靠它） */
+function orbClamp(el){
+  if(!el) return;
+  var R=vpRect(); if(!R.h) return;
+  var w=el.offsetWidth||44, h=el.offsetHeight||44;
+  var L=parseFloat(el.style.left||""), T=parseFloat(el.style.top||"");
+  if(!isFinite(L) || !isFinite(T)) return;      /* 没拖过 → 用的是 CSS 默认位，别动 */
+  var ed=""; try{ ed=localStorage.getItem("sk_orb_edge")||""; }catch(_){}
+  var minT=R.top+6, maxT=R.top+R.h-h-6;
+  if(maxT<minT) maxT=minT;
+  var nT=Math.max(minT, Math.min(T, maxT));
+  var nL=L;
+  if(ed!=="l" && ed!=="r"){                     /* 贴边时故意露一半在外面，只管上下 */
+    var minL=R.left+6, maxL=R.left+R.w-w-6;
+    if(maxL<minL) maxL=minL;
+    nL=Math.max(minL, Math.min(L, maxL));
+  }
+  if(Math.abs(nT-T)>1 || Math.abs(nL-L)>1) orbPlace(el, nL, nT, ed);
+}
+/* 可视区一变就重新归位：软键盘弹出／收起、地址栏收放、转屏 */
+function vpWatch(){
+  try{
+    var W=vpWin(), vv=W.visualViewport, t=null;
+    var on=function(){
+      clearTimeout(t);
+      t=setTimeout(function(){
+        var o=Q("orb"); if(o) orbClamp(o);
+        var p=Q("panel");
+        if(p && p.classList && p.classList.contains("open")) panelNear();
+      },130);
+    };
+    if(vv && vv.addEventListener){ vv.addEventListener("resize",on); vv.addEventListener("scroll",on); }
+    /* ⚠ 必须挂在主窗口上（脚本自己是跑在小 iframe 里的，监听 iframe 的 resize 没用） */
+    W.addEventListener("resize", on);
+    W.addEventListener("orientationchange", on);
+  }catch(e){}
+}
+
 /* 是不是触屏：手机上「拖动」会被浏览器当成滚动，所以滚动区要让给滚动 */
 var ISTOUCH=(function(){
   try{ return ('ontouchstart' in window) || ((navigator.maxTouchPoints||0)>0); }catch(e){ return false; }
@@ -1279,14 +1335,14 @@ function dragInit(){
       var dx=e.clientX-sx, dy=e.clientY-sy;
       if(!moved && Math.abs(dx)+Math.abs(dy)<5) return;
       moved=true;
-      var W=vpWin(), nx, ny;
+      var R=vpRect(), nx, ny;      /* v2.2：按真实可视区钳制，不再用不会变的 innerHeight */
       if(big){  /* 面板：允许拖到只露出一条边，但不会整块飞出屏幕 */
         var w=el.offsetWidth||430;
-        nx=Math.max(80-w, Math.min(ox+dx, W.innerWidth-80));
-        ny=Math.max(0,    Math.min(oy+dy, W.innerHeight-60));
+        nx=Math.max(R.left+80-w, Math.min(ox+dx, R.left+R.w-80));
+        ny=Math.max(R.top,       Math.min(oy+dy, R.top+R.h-60));
       } else {
-        nx=Math.max(0, Math.min(ox+dx, W.innerWidth-60));
-        ny=Math.max(0, Math.min(oy+dy, W.innerHeight-60));
+        nx=Math.max(R.left, Math.min(ox+dx, R.left+R.w-60));
+        ny=Math.max(R.top,  Math.min(oy+dy, R.top+R.h-60));
       }
       el.style.left=nx+"px"; el.style.top=ny+"px";
     });
@@ -1332,16 +1388,17 @@ function dragInit(){
   }, true);
   /* 恢复位置；跑出屏幕（或整个藏到边外太多）就丢掉，回到右下角默认位 */
   try{
-    var p=localStorage.getItem("sk_orb_pos"), W1=vpWin();
+    var p=localStorage.getItem("sk_orb_pos"), R=vpRect();
     var w0=orbEl.offsetWidth||44, h0=orbEl.offsetHeight||44;
     if(p){ var a=p.split(","), L=parseFloat(a[0]), T=parseFloat(a[1]);
       var ed=""; try{ ed=localStorage.getItem("sk_orb_edge")||""; }catch(_){}
       /* 贴边时 left 可以是负的（藏 1/3 出去），所以上下限放宽一个球的宽度 */
-      if(isFinite(L) && isFinite(T) && L>=-w0 && T>=0
-         && L<=W1.innerWidth-w0/3 && T<=W1.innerHeight-h0/2){
+      if(isFinite(L) && isFinite(T) && L>=R.left-w0 && T>=R.top
+         && L<=R.left+R.w-w0/3 && T<=R.top+R.h-h0/2){
         orbPlace(orbEl, L, T, (ed==="l"||ed==="r")?ed:"");
       } else { try{ localStorage.removeItem("sk_orb_pos"); }catch(_){} }
     }
+    orbClamp(orbEl);   /* v2.2：换设备 / 键盘弹出 / 转屏后，把球拉回看得见的地方 */
   }catch(_){}
 }
 
@@ -1349,14 +1406,15 @@ function dragInit(){
    拖到离左右边缘很近时，把球吸过去：1/3 藏到屏幕外，整体变淡（.edge）。
    指针靠上去会浮出来一点，点它照常开面板。方向记在 localStorage，重开还在原位。 */
 function orbSnap(el){
-  var W=vpWin(), w=el.offsetWidth||44, h=el.offsetHeight||44;
+  var R=vpRect(), w=el.offsetWidth||44, h=el.offsetHeight||44;
   var L=parseFloat(el.style.left||0), T=parseFloat(el.style.top||0);
   var hide=Math.round(w/3);            /* 藏出去的那部分 ≈ 三分之一 */
   var zone=Math.max(56, Math.round(w*1.5));   /* 离边这么近就算「想贴边」 */
   var side="";
-  if(L<=zone && L<=(W.innerWidth-(L+w))){ side="l"; L=-hide; }
-  else if((W.innerWidth-(L+w))<=zone){ side="r"; L=W.innerWidth-w+hide; }
-  T=Math.max(6, Math.min(T, W.innerHeight-h-6));
+  var rEdge=R.left+R.w-(L+w), lEdge=L-R.left;   /* 到右边缘 / 左边缘的距离（真实可视区） */
+  if(lEdge<=zone && lEdge<=rEdge){ side="l"; L=R.left-hide; }
+  else if(rEdge<=zone){ side="r"; L=R.left+R.w-w+hide; }
+  T=Math.max(R.top+6, Math.min(T, R.top+R.h-h-6));
   orbPlace(el, L, T, side);
   return side;
 }
@@ -1371,22 +1429,29 @@ function orbPlace(el, L, T, side){
 }
 function panelNear(){
   var panelEl=Q("panel");
-  /* 用户存过位置就用；但如果那个位置已经跑到屏幕外（换显示器/缩窗口），别照搬，重新居中 */
+  var R=vpRect();
+  var vw=R.w||vpWin().innerWidth||0, vh=R.h||vpWin().innerHeight||0;
+  /* v2.2：高度跟着真实可视区走。软键盘弹出时可视区只剩一小条，
+     面板会自己变矮，不会再被切掉一截、也不会飘到屏幕外。 */
+  var maxH=Math.max(200, Math.min(vh-16, 780));
+  panelEl.style.maxHeight=Math.round(maxH)+"px";
+  var w=panelEl.offsetWidth||Math.min(430, Math.max(240, vw-12));
+  var h=panelEl.offsetHeight||Math.min(maxH, 620);
+  /* 用户存过位置就用；但必须整块落在「现在真正看得见」的那一块里，否则回到正中 */
   try{
-    var p=localStorage.getItem("sk_panel_pos"), W0=vpWin();
+    var p=localStorage.getItem("sk_panel_pos");
     if(p){ var a=p.split(","), L=parseFloat(a[0]), T=parseFloat(a[1]);
-      if(isFinite(L) && isFinite(T) && L>=0 && T>=0
-         && L<=W0.innerWidth-80 && T<=W0.innerHeight-80){
-        panelEl.style.left=L+"px"; panelEl.style.top=T+"px";
+      if(isFinite(L) && isFinite(T)
+         && L>=R.left && T>=R.top
+         && L<=R.left+vw-w && T<=R.top+vh-h){
+        panelEl.style.left=Math.round(L)+"px"; panelEl.style.top=Math.round(T)+"px";
         panelEl.style.right="auto"; panelEl.style.bottom="auto"; return;
       }
     }
   }catch(_){}
-  /* 默认：主窗口正中 */
-  var W=vpWin();
-  var w=panelEl.offsetWidth||430, hh=panelEl.offsetHeight||620;
-  var left=Math.max(8, Math.round((W.innerWidth-w)/2));
-  var top=Math.max(8, Math.round((W.innerHeight-hh)/2));
+  /* 默认：可视区正中（带上 offsetTop —— 键盘弹出时顶部会下移） */
+  var left=Math.round(R.left+Math.max(8,(vw-w)/2));
+  var top =Math.round(R.top +Math.max(8,(vh-h)/2));
   panelEl.style.left=left+"px"; panelEl.style.top=top+"px";
   panelEl.style.right="auto"; panelEl.style.bottom="auto";
 }
@@ -1666,7 +1731,7 @@ function claimHtml(){
      "preset": {"version":"v1.9","file":"preset/斯德哥尔摩症_v1.9.json","changelog":["…"]},
      "script": {"version":"v1.0","file":"script/斯德哥尔摩·状态球.js","changelog":["…"]}
    }                                                                        */
-var ORB_VER="v2.1";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
+var ORB_VER="v2.2";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
 var REMOTE = {
   base:"https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
   mf:null,          /* 索引 */
@@ -2823,7 +2888,7 @@ paintTheme();
 /* 恢复锁定状态 */
 try{setLock(localStorage.getItem("sk_orb_lock")==="1");}catch(e){setLock(false);}
 gLoad();applyUI();          /* v1.3：读分组覆盖表 + 应用手机版/电脑版 */
-dragInit();avatarInit();gSync();renderList();updFoot();renderNow(SAMPLE);autoInit();updAutoInit();
+dragInit();avatarInit();gSync();vpWatch();renderList();updFoot();renderNow(SAMPLE);autoInit();updAutoInit();
 
 
   /* 首次启动：读预设条目；读不到就提示 */
