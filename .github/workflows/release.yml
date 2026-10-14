@@ -84,7 +84,9 @@ jobs:
               echo "建 Release 失败"; exit 1
             fi
           fi
-          ID=$(gh release view "$TAG" --json id -q .id)
+          # 注意：gh release view --json id 给的是 GraphQL 节点 ID（RE_xxx），
+          # 上传附件要的是数字 ID，必须走 gh api 拿
+          ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" -q .id)
           echo "release_id=$ID" >> "$GITHUB_OUTPUT"
           echo "Release $TAG 就绪（id=$ID）"
 
@@ -109,7 +111,7 @@ jobs:
               "https://uploads.github.com/repos/$REPO/releases/$ID/assets?name=$2" \
               -o /dev/null -w "%{http_code}")
             echo "  -> HTTP $code"
-            [ "$code" = "201" ] || { echo "  !! 这个附件没传成功"; }
+            [ "$code" = "201" ] || { echo "  !! 这个附件没传成功"; return 1; }
           }
           up "preset/stockholm_preset_${PV}_with_orb_${SV}.json" "stockholm_preset_v${PV}_with_orb_v${SV}.json"
           up "preset/preset-v${PV}.json" "preset-v${PV}.json"
