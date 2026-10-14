@@ -1,0 +1,121 @@
+name: 自动打 Release
+
+# 手机发布台只负责把文件推上来（浏览器直传 GitHub 有跨域限制，传不了 Release 附件），
+# 附件和下载页交给这里：只要 update.json 变了，就自动建 Release 并把三个附件挂上去。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'update.json'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取仓库
+        uses: actions/checkout@v4
+
+      - name: 读索引，准备 tag 与说明
+        id: meta
+        run: |
+          set -e
+          PV=$(jq -r '.preset.version' update.json)
+          PF=$(jq -r '.preset.file' update.json)
+          SV=$(jq -r '.script.version // "v0.0"' update.json)
+          TAG="v${PV#v}-orb${SV#v}"
+          {
+            echo "tag=$TAG"
+            echo "pv=${PV#v}"
+            echo "sv=${SV#v}"
+            echo "pf=$PF"
+          } >> "$GITHUB_OUTPUT"
+
+          # Release 说明：预设 / 脚本 的更新日志 + 下载指引
+          NOTES="$RUNNER_TEMP/notes.md"
+          {
+            echo "## 预设 $PV"
+            echo
+            jq -r '.preset.changelog[]? | "- " + .' update.json
+            echo
+            echo "## 状态球脚本 $SV"
+            echo
+            jq -r '.script.changelog[]? | "- " + .' update.json
+            echo
+            echo "## 怎么装"
+            echo
+            echo "| 你的情况 | 下哪个 |"
+            echo "|---|---|"
+            echo "| 手机全新装 / 一次装齐 | \`stockholm_preset_v${PV#v}_with_orb_v${SV#v}.json\` |"
+            echo "| 只要新预设 | \`preset-$PV.json\` |"
+            echo "| 只要脚本 | \`orb.js\`（导入后重开酒馆） |"
+            echo
+            echo "装着悬浮球的：面板右下角「更新」会自动拉最新版；脚本更新需要重开一次酒馆。"
+          } > "$NOTES"
+          echo "说明已生成：" ; head -5 "$NOTES"
+
+      - name: 建 Release（已存在就原样跳过）
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          if gh release view "$TAG" --json id >/dev/null 2>&1; then
+            echo "Release $TAG 已经存在，跳过创建（想重发就先把旧 Release 删掉）"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # 本地 publish.py 也可能同时在打同一个 Release，创建失败时兜个底
+          if ! gh release create "$TAG" \
+              --title "预设 v${{ steps.meta.outputs.pv }} + 状态球 v${{ steps.meta.outputs.sv }}" \
+              --notes-file "$RUNNER_TEMP/notes.md"; then
+            if gh release view "$TAG" --json id >/dev/null 2>&1; then
+              echo "有别的流程同时把它建好了，直接用现成的"
+            else
+              echo "建 Release 失败"; exit 1
+            fi
+          fi
+          ID=$(gh release view "$TAG" --json id -q .id)
+          echo "release_id=$ID" >> "$GITHUB_OUTPUT"
+          echo "Release $TAG 就绪（id=$ID）"
+
+      - name: 上传三个附件（名字保持和以前一致）
+        if: steps.rel.outputs.skip != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          PV="${{ steps.meta.outputs.pv }}"
+          SV="${{ steps.meta.outputs.sv }}"
+          ID="${{ steps.rel.outputs.release_id }}"
+          REPO="${{ github.repository }}"
+          up () {  # $1=仓库里的路径  $2=附件显示名（都是 URL 安全字符，直接拼）
+            if [ ! -f "$1" ]; then echo "跳过（文件不存在）：$1"; return 0; fi
+            SZ=$(du -h "$1" | cut -f1)
+            echo "上传 $2 （$SZ）"
+            code=$(curl -sS -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"$1" \
+              "https://uploads.github.com/repos/$REPO/releases/$ID/assets?name=$2" \
+              -o /dev/null -w "%{http_code}")
+            echo "  -> HTTP $code"
+            [ "$code" = "201" ] || { echo "  !! 这个附件没传成功"; }
+          }
+          up "preset/stockholm_preset_${PV}_with_orb_${SV}.json" "stockholm_preset_v${PV}_with_orb_v${SV}.json"
+          up "preset/preset-v${PV}.json" "preset-v${PV}.json"
+          up "script/orb.js" "orb.js"
+
+      - name: 小结
+        if: steps.rel.outputs.skip != '1'
+        run: |
+          echo "完成：https://github.com/${{ github.repository }}/releases/tag/${{ steps.meta.outputs.tag }}"

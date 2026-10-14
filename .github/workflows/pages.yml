@@ -1,0 +1,43 @@
+name: 部署手机发布台
+
+# 把 tool/ 目录发布成网页：https://zhaoyichan.github.io/SillyTavern-Preset-Stockholm/
+# 手机浏览器打开这个地址就能用发布台（有正经域名，token 才存得住）。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tool/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备 Pages
+        uses: actions/configure-pages@v5
+      - name: 打包 tool 目录
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: tool
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

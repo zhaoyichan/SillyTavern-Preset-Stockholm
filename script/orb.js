@@ -1038,6 +1038,28 @@ var GROUP_DEF=[
    "贩子死妈（勿开）","Agent System Prompt","Agent Results",
    "Main Prompt","Post-History Instructions","Agent Task","Enhance Definitions"]}
 ];
+/* 内置分组是「兜底」。真源优先读当前预设里的 extensions.sk_groups ——
+   那是作者在「手机发布台」里分好后随预设一起发下来的，导入即生效。
+   手机发布台在哪分、这里就怎么显示，两边一套数据。读不到就退回下面这份内置。 */
+var GROUP_BUILTIN=GROUP_DEF;
+function gSync(){
+  GROUP_DEF=GROUP_BUILTIN;
+  try{
+    if(typeof call!=="function") return "";      /* 源文件单独打开时没有 call，静默退回 */
+    var c=call("getPreset"); if(!c) return "";
+    var p=c.run("in_use");
+    var g=p && p.extensions && p.extensions.sk_groups;
+    if(!Array.isArray(g) || !g.length) return "";
+    var arr=[];
+    for(var i=0;i<g.length;i++){
+      var x=g[i]; if(!x) continue;
+      var nm=x.nm||x.name; if(!nm) continue;
+      arr.push({id:x.id||("g"+(i+1)), nm:nm, m:Array.isArray(x.m)?x.m.slice():[]});
+    }
+    if(arr.length){ GROUP_DEF=arr; return "预设"; }
+  }catch(e){}
+  return "";
+}
 var GUSER={map:{},extra:[],open:{}};
 function gLoad(){
   try{
@@ -1644,7 +1666,7 @@ function claimHtml(){
      "preset": {"version":"v1.9","file":"preset/斯德哥尔摩症_v1.9.json","changelog":["…"]},
      "script": {"version":"v1.0","file":"script/斯德哥尔摩·状态球.js","changelog":["…"]}
    }                                                                        */
-var ORB_VER="v2.0";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
+var ORB_VER="v2.1";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
 var REMOTE = {
   base:"https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
   mf:null,          /* 索引 */
@@ -2309,7 +2331,7 @@ function upApply(){
       根本看不出是刷新崩了还是压根没更新。 */
 function panelRefresh(){
   var paint=function(){
-    try{ renderList();updFoot(); }
+    try{ gSync();renderList();updFoot(); }
     catch(e){ try{ console&&console.log&&console.log("[orb] 面板刷新出错",e); }catch(_){}
               try{ toast("面板刷新出错："+e); }catch(_){} }
   };
@@ -2801,7 +2823,7 @@ paintTheme();
 /* 恢复锁定状态 */
 try{setLock(localStorage.getItem("sk_orb_lock")==="1");}catch(e){setLock(false);}
 gLoad();applyUI();          /* v1.3：读分组覆盖表 + 应用手机版/电脑版 */
-dragInit();avatarInit();renderList();updFoot();renderNow(SAMPLE);autoInit();updAutoInit();
+dragInit();avatarInit();gSync();renderList();updFoot();renderNow(SAMPLE);autoInit();updAutoInit();
 
 
   /* 首次启动：读预设条目；读不到就提示 */

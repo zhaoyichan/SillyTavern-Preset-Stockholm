@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#e8e0d0">
+<title>斯德哥尔摩 · 手机发布台</title>
+<style>
+:root{
+  --bg:#e8e0d0; --paper:#fffdf7; --paper2:#f7f2e9; --line:#e3d9c4;
+  --soft:#fbf8f1; --lineSoft:#efe9dc;
+  --ink:#2b2620; --ink2:#6b6154; --ink3:#9c9184;
+  --gold:#ba7517; --gold2:#f0e0bd;
+  --red:#a83232; --red2:#f7e2e2;
+  --green:#3d7a55; --green2:#f4fbf6; --greenline:#bcd9c4;
+  --blue:#3a6b8c; --blue2:#e0ecf4;
+  --shadow:0 10px 30px rgba(60,48,30,.16),0 2px 6px rgba(60,48,30,.08);
+  --r:14px;
+}
+html.night{
+  --bg:#12141a; --paper:#1b1e26; --paper2:#232733; --line:#2f3542;
+  --soft:#1e222b; --lineSoft:#252a34;
+  --ink:#e8e4da; --ink2:#a8a29a; --ink3:#7b756c;
+  --gold:#d9a54a; --gold2:#33291a;
+  --red:#e0685f; --red2:#33211f;
+  --green:#6fb894; --green2:#1c2c23; --greenline:#2f5240;
+  --blue:#6fa8cf; --blue2:#1e2b36;
+  --shadow:0 10px 30px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  background:var(--bg); color:var(--ink); font-size:15px; line-height:1.55;
+  display:flex; flex-direction:column; height:100dvh; overflow:hidden;
+  transition:background .3s,color .3s;
+}
+/* ---------- 顶栏 ---------- */
+.top{flex:none;display:flex;align-items:center;gap:10px;padding:12px 14px;
+  padding-top:calc(12px + env(safe-area-inset-top));
+  background:var(--soft);border-bottom:1px solid var(--lineSoft)}
+.top .tg{flex:1;min-width:0}
+.top .tg b{display:block;font-size:16px;font-weight:600;letter-spacing:.3px}
+.top .tg span{font-size:11.5px;color:var(--ink3);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .icon{width:38px;height:38px;flex:none;border-radius:11px;border:1px solid var(--line);
+  background:var(--paper);color:var(--ink2);font-size:17px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.top .icon:active{background:var(--gold);color:#fff;border-color:var(--gold)}
+/* ---------- 主体 ---------- */
+main{flex:1;min-height:0;position:relative}
+.pg{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;
+  padding:12px 12px 92px;display:none;-webkit-overflow-scrolling:touch}
+.pg.on{display:block}
+/* ---------- 底栏 tab ---------- */
+.tabs{flex:none;display:flex;background:var(--soft);border-top:1px solid var(--lineSoft);
+  padding-bottom:env(safe-area-inset-bottom)}
+.tabs button{flex:1;border:0;background:transparent;color:var(--ink3);font-size:12px;
+  padding:9px 0 10px;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;
+  align-items:center;gap:2px;position:relative}
+.tabs button i{font-size:19px;font-style:normal;line-height:1}
+.tabs button.on{color:var(--gold)}
+.tabs button.on::after{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:26px;height:2.5px;border-radius:2px;background:var(--gold)}
+/* ---------- 通用块 ---------- */
+.box{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);
+  padding:12px;margin-bottom:10px}
+.brow{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:5px 0;font-size:13.5px}
+.brow+.brow{border-top:1px dashed var(--line)}
+.brow span{color:var(--ink2)}
+.brow b{font-weight:600;text-align:right;word-break:break-all}
+.lb{display:block;font-size:12.5px;color:var(--ink2);margin-bottom:6px;font-weight:600}
+.hint{font-size:11.5px;color:var(--ink3);margin-top:6px;line-height:1.6}
+input[type=text],input[type=password],input:not([type]),textarea{
+  width:100%;font-family:inherit;font-size:16px;color:var(--ink);background:var(--paper2);
+  border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:none}
+input:focus,textarea:focus{border-color:var(--gold)}
+textarea{resize:vertical;line-height:1.6;min-height:96px}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.row .sl{flex:none;color:var(--ink3)}
+button{font-family:inherit}
+.acts{display:flex;gap:8px;margin-bottom:10px}
+.acts button{flex:1;padding:11px;border-radius:11px;border:1px solid var(--line);
+  background:var(--paper);color:var(--ink);font-size:14px;cursor:pointer;font-weight:500}
+.acts button.p{background:var(--gold);color:#fff;border-color:var(--gold)}
+.acts button:active{transform:scale(.98)}
+.big{display:block;width:100%;padding:14px;border-radius:12px;border:0;
+  background:var(--gold);color:#fff;font-size:15.5px;font-weight:600;cursor:pointer;
+  margin-bottom:10px}
+.big:active{transform:scale(.99)}
+.big.s{background:var(--paper);color:var(--ink);border:1px solid var(--line);font-weight:500}
+.big[disabled]{opacity:.45;pointer-events:none}
+.chk{display:flex;align-items:center;gap:10px;background:var(--paper);border:1px solid var(--line);
+  border-radius:var(--r);padding:12px;margin-bottom:10px;font-size:14px;cursor:pointer}
+.chk input{width:20px;height:20px;flex:none;accent-color:var(--gold)}
+/* ---------- 条目列表 ---------- */
+.gh{display:flex;align-items:center;gap:9px;padding:11px 12px;margin:8px 0 4px;
+  background:var(--paper2);border:1px solid var(--line);border-radius:11px;
+  cursor:pointer;user-select:none}
+.gh .cv{width:16px;flex:none;font-size:10px;color:var(--ink3);transition:transform .2s}
+.gh.cl .cv{transform:rotate(-90deg)}
+.gh .gn{flex:1;font-size:13.5px;font-weight:600}
+.gh .gc{font-size:11px;color:var(--ink3)}
+.row-it{display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--paper);
+  border:1px solid var(--line);border-radius:11px;margin-bottom:6px;cursor:pointer}
+.row-it:active{background:var(--paper2)}
+.row-it .nm{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row-it .nm em{font-style:normal;color:var(--ink3);font-size:11px;margin-left:6px}
+.row-it .nm.at::before{content:"✎ ";color:var(--gold)}
+.sw{width:44px;height:26px;flex:none;border-radius:13px;background:var(--line);
+  position:relative;transition:background .2s;cursor:pointer}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.sw.on{background:var(--green)}
+.sw.on::after{transform:translateX(18px)}
+.empty{text-align:center;color:var(--ink3);font-size:13.5px;padding:40px 20px;line-height:2}
+/* ---------- 弹层 ---------- */
+.sheet{position:fixed;inset:0;z-index:50;display:none;background:rgba(30,24,16,.42)}
+.sheet.on{display:flex;align-items:flex-end}
+.sheet .card{width:100%;max-height:92dvh;background:var(--paper);border-radius:18px 18px 0 0;
+  display:flex;flex-direction:column;overflow:hidden;animation:up .24s cubic-bezier(.34,1.3,.64,1)}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.sheet .hd{flex:none;display:flex;align-items:center;gap:8px;padding:13px 14px;
+  border-bottom:1px solid var(--lineSoft);background:var(--soft)}
+.sheet .hd b{flex:1;font-size:15px}
+.sheet .hd button{padding:7px 13px;border-radius:9px;border:1px solid var(--line);
+  background:var(--paper);color:var(--ink);font-size:13px;cursor:pointer}
+.sheet .hd button.sv{background:var(--gold);color:#fff;border-color:var(--gold);font-weight:600}
+.sheet .bd{flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch}
+.sheet .fld{margin-bottom:12px}
+.sheet textarea{min-height:180px;font-size:15px}
+.del{display:block;width:100%;padding:12px;border-radius:11px;border:1px solid var(--red);
+  background:var(--red2);color:var(--red);font-size:14px;font-weight:600;cursor:pointer}
+/* ---------- 发布日志 ---------- */
+.plog{font-size:12.5px;color:var(--ink2);line-height:1.9;word-break:break-all;margin-top:6px}
+.plog .ok{color:var(--green)}
+.plog .er{color:var(--red)}
+.diff{font-size:13px;line-height:2;color:var(--ink2)}
+.diff .k{display:inline-block;min-width:56px;color:var(--ink3)}
+.diff .v{color:var(--ink)}
+.diff .up{color:var(--green)}
+.diff .rm{color:var(--red)}
+/* ---------- toast ---------- */
+#toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%) translateY(20px);
+  background:rgba(35,28,18,.94);color:#fff;font-size:13.5px;padding:10px 18px;border-radius:11px;
+  opacity:0;pointer-events:none;transition:.24s;z-index:99;max-width:86vw;text-align:center;
+  line-height:1.5}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.tag{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:6px;
+  background:var(--gold2);color:var(--gold);margin-left:6px;vertical-align:1px}
+.tag.g{background:var(--green2);color:var(--green)}
+.tag.r{background:var(--red2);color:var(--red)}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="tg">
+    <b>手机发布台</b>
+    <span id="hSub">还没载入预设</span>
+  </div>
+  <button class="icon" id="btnTheme" title="日间 / 夜间">◐</button>
+</header>
+
+<main>
+  <!-- ============ 预设 ============ -->
+  <section class="pg on" id="pg-preset">
+    <div class="acts">
+      <button class="p" id="aLoad">载入预设文件</button>
+      <button id="aPull">从仓库拉取</button>
+    </div>
+    <div class="acts" style="margin-bottom:12px">
+      <input id="sch" placeholder="搜索条目名…" style="flex:2">
+      <button id="aFold" style="flex:1">折叠全部</button>
+    </div>
+    <div id="list"></div>
+    <div class="acts" style="margin-top:12px">
+      <button id="bAdd">＋ 新增条目</button>
+      <button id="bGrp">分组管理</button>
+    </div>
+  </section>
+
+  <!-- ============ 发布 ============ -->
+  <section class="pg" id="pg-pub">
+    <div class="box">
+      <div class="brow"><span>目标仓库</span><b id="pubRepo">—</b></div>
+      <div class="brow"><span>我这份预设</span><b id="pubCur">—</b></div>
+      <div class="brow"><span>仓库线上版</span><b id="pubRemote">未查询</b></div>
+      <div class="brow"><span>脚本</span><b id="pubScript">—</b></div>
+    </div>
+
+    <label class="chk"><input type="checkbox" id="ckScript" checked>
+      <span>附带最新脚本<span class="hint" style="margin:2px 0 0">从仓库拉当前线上脚本，内嵌进预设（手机一次就能装齐）</span></span>
+    </label>
+
+    <div class="box">
+      <label class="lb">版本号</label>
+      <input id="pvIn" placeholder="自动">
+      <div class="hint" id="pvHint">载入预设后自动判断（内容改了但版本号没升，会自动 +1）</div>
+    </div>
+
+    <div class="box">
+      <label class="lb">更新日志（你写，一行一条）</label>
+      <textarea id="logIn" placeholder="例：&#10;加强了 NPC 的暴力倾向&#10;删掉两个小剧场&#10;新增「✹ 同人导演」条目"></textarea>
+    </div>
+
+    <div class="box">
+      <label class="lb">变化预览（自动检测，仅供参考）</label>
+      <div class="diff" id="diffBox">先载入预设</div>
+    </div>
+
+    <button class="big" id="bPub">发布到仓库</button>
+    <button class="big s" id="bDl">下载整合件（手机导入用）</button>
+    <div class="plog" id="pubLog"></div>
+  </section>
+
+  <!-- ============ 设置 ============ -->
+  <section class="pg" id="pg-set">
+    <div class="box">
+      <label class="lb">GitHub Token</label>
+      <div class="row">
+        <input id="tkIn" type="password" placeholder="github_pat_… 或 ghp_…">
+        <button id="tkEye" style="flex:none;padding:10px 14px;border-radius:10px;
+          border:1px solid var(--line);background:var(--paper);color:var(--ink2);font-size:13px">显示</button>
+      </div>
+      <div class="hint">只存在你手机浏览器本地，不会发到任何别的地方。建议用「细粒度 token」，只勾这个仓库的 Contents 读写 + Workflows 读写。</div>
+    </div>
+    <div class="box">
+      <label class="lb">仓库</label>
+      <div class="row">
+        <input id="owIn" placeholder="owner">
+        <span class="sl">/</span>
+        <input id="rpIn" placeholder="repo">
+      </div>
+      <div class="row" style="margin-top:9px">
+        <span class="sl" style="flex:none">分支</span>
+        <input id="brIn" placeholder="main" style="flex:1">
+      </div>
+    </div>
+    <button class="big s" id="bTest">测试连接</button>
+    <div class="box">
+      <label class="lb">这事是怎么跑的</label>
+      <div class="hint" style="font-size:12.5px">
+        1. 在「预设」页载入你改好的 JSON（或直接从仓库拉当前版）<br>
+        2. 需要就改条目、改分组<br>
+        3. 到「发布」页写更新日志、确认版本号 → 点发布<br>
+        4. 网页直接把文件写进仓库；仓库里的机器人（Actions）随后自动生成下载包和 Release 页面
+      </div>
+    </div>
+    <div class="plog" id="setLog"></div>
+  </section>
+</main>
+
+<nav class="tabs">
+  <button data-pg="preset" class="on"><i>☰</i>预设</button>
+  <button data-pg="pub"><i>↑</i>发布</button>
+  <button data-pg="set"><i>⚙</i>设置</button>
+</nav>
+
+<div class="sheet" id="sheet"><div class="card" id="sheetCard"></div></div>
+<div id="toast"></div>
+<input type="file" id="fileP" accept=".json,application/json" hidden>
+
+<script>
+(function(){
+"use strict";
+
+/* ========================= 小工具 ========================= */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"})[c]; }); }
+var __t=0;
+function toast(m){ var t=$("toast"); t.textContent=m; t.classList.add("on");
+  clearTimeout(__t); __t=setTimeout(function(){ t.classList.remove("on"); },2200); }
+function logTo(id,msg,cls){
+  var box=$(id); if(!box) return;
+  box.innerHTML += '<div class="'+(cls||"")+'">'+esc(msg)+'</div>';
+  box.scrollTop = box.scrollHeight;
+}
+function b64enc(str){
+  var bytes=new TextEncoder().encode(str), chunk=0x8000, out="";
+  for(var i=0;i<bytes.length;i+=chunk)
+    out+=String.fromCharCode.apply(null, bytes.subarray(i,i+chunk));
+  return btoa(out);
+}
+function b64dec(b64){
+  var bin=atob(String(b64).replace(/[\r\n]/g,""));
+  var arr=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new TextDecoder().decode(arr);
+}
+function today(){ var d=new Date(), p=function(n){return (n<10?"0":"")+n;};
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+function vparse(s){ var m=String(s==null?"":s).match(/v(\d+(?:\.\d+)*)\s*$/i); return m?("v"+m[1]):null; }
+function vbump(v){
+  if(!v) return "v1.0";
+  var p=v.replace(/^v/i,"").split(".");
+  p[p.length-1]=String(parseInt(p[p.length-1],10)+1);
+  return "v"+p.join(".");
+}
+function slug(name){
+  var s=String(name||"").replace(/[^A-Za-z0-9]+/g,"-").replace(/^-+|-+$/g,"").toLowerCase();
+  if(s.length<2) s="item";
+  return "sk-"+s+"-"+Date.now().toString(36);
+}
+function pickFile(accept,cb){
+  var inp=$("fileP");
+  inp.setAttribute("accept",accept||".json,application/json");
+  inp.onchange=function(){
+    var f=this.files&&this.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(){ cb(String(rd.result), f.name); };
+    rd.onerror=function(){ toast("读文件失败"); };
+    rd.readAsText(f);
+    this.value="";
+  };
+  inp.click();
+}
+
+/* ========================= 仓库设置 ========================= */
+var DEF_REPO={owner:"zhaoyichan", repo:"SillyTavern-Preset-Stockholm", branch:"main"};
+var GH={token:"", owner:DEF_REPO.owner, repo:DEF_REPO.repo, branch:DEF_REPO.branch};
+function ghLoad(){ try{ var s=localStorage.getItem("sk_pub_gh");
+  if(s){ var j=JSON.parse(s);
+    ["token","owner","repo","branch"].forEach(function(k){ if(j[k]!=null) GH[k]=j[k]; }); } }catch(e){} }
+function ghSave(){ try{ localStorage.setItem("sk_pub_gh",JSON.stringify(GH)); }catch(e){} }
+function ghFill(){ $("tkIn").value=GH.token; $("owIn").value=GH.owner;
+  $("rpIn").value=GH.repo; $("brIn").value=GH.branch||"main"; }
+function ghRead(){ GH.token=$("tkIn").value.trim(); GH.owner=$("owIn").value.trim();
+  GH.repo=$("rpIn").value.trim(); GH.branch=$("brIn").value.trim()||"main"; ghSave(); }
+
+function api(p){ return "https://api.github.com/repos/"+encodeURIComponent(GH.owner)
+  +"/"+encodeURIComponent(GH.repo)+p; }
+async function ghFetch(method,url,body){
+  var h={ "Accept":"application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28" };
+  if(GH.token) h["Authorization"]="Bearer "+GH.token;
+  var opt={method:method, headers:h};
+  if(body!==undefined){ h["Content-Type"]="application/json"; opt.body=JSON.stringify(body); }
+  var r=await fetch(url,opt);
+  var txt=await r.text(), data=null;
+  try{ data=JSON.parse(txt); }catch(e){ data=txt; }
+  if(!r.ok){
+    var msg=(data&&data.message)||txt||("HTTP "+r.status);
+    if(r.status===401) msg="Token 无效或过期（401）";
+    else if(r.status===403) msg="没权限或限流（403）："+(data&&data.message||"");
+    else if(r.status===404) msg="找不到（404）—— 仓库 / 分支 / 文件核对一下";
+    var e=new Error(msg); e.status=r.status; e.data=data; throw e;
+  }
+  return data;
+}
+function contentsPath(p){
+  return "/contents/"+p.split("/").map(encodeURIComponent).join("/")
+    +"?ref="+encodeURIComponent(GH.branch||"main");
+}
+async function ghGetFile(path){
+  var j=await ghFetch("GET", api(contentsPath(path)));
+  return { text:b64dec(j.content), sha:j.sha, size:j.size };
+}
+/* 一次提交多个文件的原子写法（Git Data API） */
+async function ghCommit(files, message){
+  var ref=await ghFetch("GET", api("/git/ref/heads/"+encodeURIComponent(GH.branch||"main")));
+  var head=ref.object.sha;
+  var cmt=await ghFetch("GET", api("/git/commits/"+head));
+  var base=cmt.tree.sha;
+  var tree=[];
+  for(var i=0;i<files.length;i++){
+    var b=await ghFetch("POST", api("/git/blobs"), {content:b64enc(files[i].content), encoding:"base64"});
+    tree.push({path:files[i].path, mode:"100644", type:"blob", sha:b.sha});
+  }
+  var nt=await ghFetch("POST", api("/git/trees"), {base_tree:base, tree:tree});
+  var nc=await ghFetch("POST", api("/git/commits"), {message:message, tree:nt.sha, parents:[head]});
+  await ghFetch("PATCH", api("/git/refs/heads/"+encodeURIComponent(GH.branch||"main")), {sha:nc.sha});
+  return nc.sha;
+}
+
+/* ========================= 状态 ========================= */
+var P=null;         /* 预设对象 */
+var PROMPTS=[];     /* P.prompts 的引用（原条目对象，就地改字段） */
+var GROUPS=[];      /* [{id,nm,m:[名字]}] */
+var GOPEN={};       /* 组展开状态 */
+var EDITI=-1;
+var REMOTE=null;    /* 仓库缓存 {man, oldP, orbText} */
+
+var DEF_GROUPS=[
+ {id:"core",nm:"核心规则",m:["✦ Liwe 本体","✦ 人类基准·誓言","✦ 世界逻辑","✦ 叙事总纲"]},
+ {id:"char",nm:"角色 · 场景",m:["✷ NPC 主体性","✷ 新角色入场","✷ 角色锚","✷ 信息边界·防全知",
+   "✷ 用户档案","✷ 角色外貌","✷ 角色性格","✷ 场景","✷ 对话范例"]},
+ {id:"flow",nm:"推演 · 输出",m:["✹ 推演流程","✼ 输出·强制"]},
+ {id:"book",nm:"世界书 · 历史",m:["✸ 约束","✶ 世界书·前","✶ 世界书·后","✼ 历史"]},
+ {id:"style",nm:"篇幅 · 文风",m:["✹ 篇幅·长","✹ 双语对白","✹ 英文输出","✹ 人称（在此填人称）",
+   "✹ 文风·病态虐恋","✹ 文风·沙雕","✹ char第1人称吐槽","✹ 文风·轻小说","✹ 对白主导"]},
+ {id:"diff",nm:"难度 · 世界的态度",m:["✹ 世界难度·最高","✹ 简单模式","✹ 无脑爽","✹ 导演偏心",
+   "✹ 血肉之躯","✹ 社会鄙视链"]},
+ {id:"tempo",nm:"节奏 · 结构",m:["✹ 伏笔追踪","✹ 平行世界·离线","✹ 末尾钩子","✹ 缓慢节奏",
+   "✹ 群像镜头外","✹ 抢话·普通","✹ 抢话·疯狂"]},
+ {id:"play",nm:"可选玩法",m:["✹ 用户入镜","✹ 破甲","✹ 抗截断·安全尾","✹ NSFW","✹ 防乱发情","✹ 小猫娘",
+   "✹ 骰子","✹ 经济·科技","✹ 任务承诺追踪","✹ 剧情选项","✹ 拷打"]},
+ {id:"fan",nm:"同人",m:["✹ 同人导演","✹ 同人·简版","✹ 同人·详细版"]},
+ {id:"end",nm:"终局",m:["🎬 终局·编年史","🎬 终局·众生录","🎬 终局·回响·日记"]},
+ {id:"theater",nm:"小剧场 · 番外",m:["🎭 第四面墙吐槽"]},
+ {id:"slot",nm:"酒馆固定槽位 · 别动",m:["贩子死妈（勿开）","Agent System Prompt","Agent Results",
+   "Main Prompt","Post-History Instructions","Agent Task","Enhance Definitions"]}
+];
+
+/* ---------- 分组 ---------- */
+function ensureGroups(){
+  GROUPS=[];
+  var g=P&&P.extensions&&P.extensions.sk_groups;
+  if(Array.isArray(g)&&g.length){
+    GROUPS=g.map(function(x){
+      return { id:x.id||("g"+Math.random().toString(36).slice(2,7)),
+               nm:x.nm||x.name||"未命名组",
+               m:Array.isArray(x.m)?x.m.slice():[] };
+    });
+  }else{
+    GROUPS=JSON.parse(JSON.stringify(DEF_GROUPS));
+  }
+  saveGroups();
+}
+function saveGroups(){
+  if(!P) return;
+  P.extensions=P.extensions||{};
+  P.extensions.sk_groups=GROUPS.map(function(g){ return {id:g.id, nm:g.nm, m:g.m}; });
+}
+function gidOf(name){
+  for(var i=0;i<GROUPS.length;i++){ if(GROUPS[i].m.indexOf(name)>=0) return GROUPS[i].id; }
+  return "";
+}
+function gMove(name,gid){
+  GROUPS.forEach(function(g){ var k=g.m.indexOf(name); if(k>=0) g.m.splice(k,1); });
+  if(gid){ var t=GROUPS.filter(function(g){return g.id===gid;})[0]; if(t) t.m.push(name); }
+  saveGroups();
+}
+function gIsOpen(gid){ return GOPEN[gid]!==false; }
+
+/* ---------- 头部 ---------- */
+function setHead(){
+  if(!P){ $("hSub").textContent="还没载入预设"; return; }
+  var on=PROMPTS.filter(function(p){ return !!p.enabled; }).length;
+  $("hSub").textContent=(P.name||"未命名")+" · "+PROMPTS.length+" 条（开 "+on+"）";
+}
+
+/* ---------- 渲染列表 ---------- */
+function rowHtml(i){
+  var p=PROMPTS[i], nm=p.name||"(无名条目)", en=!!p.enabled;
+  return '<div class="row-it" data-i="'+i+'">'
+    +'<div class="nm">'+esc(nm)+'</div>'
+    +'<div class="sw'+(en?" on":"")+'" data-sw="'+i+'"></div></div>';
+}
+function gHeadHtml(g,ids){
+  var on=ids.filter(function(i){ return !!PROMPTS[i].enabled; }).length;
+  return '<div class="gh'+(gIsOpen(g.id)?"":" cl")+'" data-gh="'+esc(g.id)+'">'
+    +'<span class="cv">▼</span>'
+    +'<span class="gn">'+esc(g.nm)+'</span>'
+    +'<span class="gc">'+on+'/'+ids.length+'</span></div>';
+}
+function renderList(){
+  var box=$("list");
+  if(!P){ box.innerHTML='<div class="empty">还没载入预设<br>点上面「载入预设文件」选你改好的 JSON</div>'; setHead(); return; }
+  var kw=($("sch").value||"").trim().toLowerCase();
+  var nameIdx={};
+  PROMPTS.forEach(function(p,i){ var n=p.name||""; if(n&&nameIdx[n]===undefined) nameIdx[n]=i; });
+  var vis=[];
+  PROMPTS.forEach(function(p,i){
+    var n=p.name||"(无名条目)";
+    if(kw && n.toLowerCase().indexOf(kw)<0) return;
+    vis.push(i);
+  });
+  var inGroup={};
+  GROUPS.forEach(function(g){
+    g.m.forEach(function(nm){ var i=nameIdx[nm]; if(i!==undefined) inGroup[i]=g.id; });
+  });
+  var html="", shown={};
+  GROUPS.forEach(function(g){
+    var ids=vis.filter(function(i){ return inGroup[i]===g.id; });
+    if(!ids.length) return;
+    html+=gHeadHtml(g,ids);
+    if(gIsOpen(g.id)) ids.forEach(function(i){ html+=rowHtml(i); shown[i]=1; });
+  });
+  var rest=vis.filter(function(i){ return !shown[i]; });
+  if(rest.length){
+    var fake={id:"__none", nm:"未分组"};
+    html+=gHeadHtml(fake,rest);
+    if(gIsOpen("__none")) rest.forEach(function(i){ html+=rowHtml(i); });
+  }
+  box.innerHTML=html||'<div class="empty">没有匹配的条目</div>';
+  bindRows();
+  setHead();
+}
+function bindRows(){
+  var box=$("list");
+  box.querySelectorAll("[data-gh]").forEach(function(el){
+    el.onclick=function(){ var gid=el.getAttribute("data-gh");
+      GOPEN[gid]=!gIsOpen(gid); renderList(); };
+  });
+  box.querySelectorAll("[data-sw]").forEach(function(el){
+    el.onclick=function(e){ e.stopPropagation();
+      var i=+el.getAttribute("data-sw");
+      PROMPTS[i].enabled=!PROMPTS[i].enabled; renderList(); };
+  });
+  box.querySelectorAll(".row-it").forEach(function(el){
+    el.onclick=function(){ openEditor(+el.getAttribute("data-i")); };
+  });
+}
+
+/* ---------- 弹层 ---------- */
+function sheetOpen(html){ $("sheetCard").innerHTML=html; $("sheet").classList.add("on"); }
+function sheetClose(){ $("sheet").classList.remove("on"); }
+
+/* ---------- 编辑条目 ---------- */
+function openEditor(i){
+  if(!P){ toast("先载入预设"); return; }
+  EDITI=i;
+  var isNew=(i<0);
+  var p=isNew?{name:"",role:"system",content:"",enabled:true}:PROMPTS[i];
+  var gid=gidOf(p.name||"");
+  var roleOpts=["system","user","assistant"].map(function(r){
+    return '<option value="'+r+'"'+(p.role===r?" selected":"")+'>'+r+'</option>'; }).join("");
+  var grpOpts='<option value="">（未分组）</option>'+GROUPS.map(function(g){
+    return '<option value="'+esc(g.id)+'"'+(gid===g.id?" selected":"")+'>'+esc(g.nm)+'</option>'; }).join("");
+  sheetOpen(
+    '<div class="hd"><b>'+(isNew?"新增条目":"编辑条目")+'</b>'
+    +'<button id="edCancel">取消</button><button class="sv" id="edSave">保存</button></div>'
+    +'<div class="bd">'
+    +'<div class="fld"><label class="lb">名字</label><input id="edName" value="'+esc(p.name||"")+'" placeholder="条目名"></div>'
+    +'<div class="fld"><label class="lb">角色</label><select id="edRole" style="width:100%;font-size:16px;padding:10px 12px;'
+    +'border:1px solid var(--line);border-radius:10px;background:var(--paper2);color:var(--ink);font-family:inherit">'
+    +roleOpts+'</select></div>'
+    +'<div class="fld"><label class="lb">分组</label><select id="edGrp" style="width:100%;font-size:16px;padding:10px 12px;'
+    +'border:1px solid var(--line);border-radius:10px;background:var(--paper2);color:var(--ink);font-family:inherit">'
+    +grpOpts+'</select></div>'
+    +'<div class="fld"><label class="lb">正文</label><textarea id="edBody" placeholder="写提示词内容…">'+esc(p.content||"")+'</textarea></div>'
+    +(isNew?"":'<div class="fld"><button class="del" id="edDel">删除这个条目</button></div>')
+    +'</div>'
+  );
+  $("edCancel").onclick=sheetClose;
+  $("edSave").onclick=saveEditor;
+  if(!isNew){ $("edDel").onclick=function(){ delItem(i); }; }
+  setTimeout(function(){ var n=$("edName"); if(n&&!isNew) n.focus(); },80);
+}
+function saveEditor(){
+  var nm=($("edName").value||"").trim();
+  var role=$("edRole").value||"system";
+  var body=$("edBody").value||"";
+  var gid=$("edGrp").value||"";
+  if(!nm){ toast("给条目起个名字"); return; }
+  if(EDITI<0){
+    var o={ name:nm, role:role, content:body, enabled:true };
+    o.identifier=slug(nm);
+    PROMPTS.push(o);
+    addToOrder(o.identifier,true);
+    gMove(nm,gid);
+    toast("已新增："+nm);
+  }else{
+    var p=PROMPTS[EDITI];
+    var oldName=p.name||"";
+    p.name=nm; p.role=role; p.content=body;
+    if(oldName!==nm){
+      GROUPS.forEach(function(g){ var k=g.m.indexOf(oldName); if(k>=0) g.m[k]=nm; });
+    }
+    gMove(nm,gid);
+    toast("已保存");
+  }
+  sheetClose(); renderList(); refreshPub();
+}
+function delItem(i){
+  var nm=PROMPTS[i].name||"这条";
+  if(!confirm("确定删除「"+nm+"」？\n（保存后发布时，仓库会用 remove 把这个条目也删掉）")) return;
+  var p=PROMPTS[i];
+  PROMPTS.splice(i,1);
+  GROUPS.forEach(function(g){ var k=g.m.indexOf(p.name||""); if(k>=0) g.m.splice(k,1); });
+  if(p.identifier) delFromOrder(p.identifier);
+  saveGroups();
+  sheetClose(); renderList(); refreshPub();
+  toast("已删除（记得发布才会同步到仓库）");
+}
+function addToOrder(id,en){
+  if(!P||!id) return;
+  var br=P.prompt_order;
+  if(!Array.isArray(br)||!br.length) return;
+  br.forEach(function(b){
+    if(!Array.isArray(b.order)) b.order=[];
+    var has=b.order.some(function(o){ return o&&o.identifier===id; });
+    if(!has) b.order.push({enabled:!!en, identifier:id});
+  });
+}
+function delFromOrder(id){
+  if(!P||!id) return;
+  (P.prompt_order||[]).forEach(function(b){
+    if(!Array.isArray(b.order)) return;
+    b.order=b.order.filter(function(o){ return !(o&&o.identifier===id); });
+  });
+}
+
+/* ---------- 分组管理 ---------- */
+function openGroups(){
+  if(!P){ toast("先载入预设"); return; }
+  var rows=GROUPS.map(function(g,k){
+    return '<div class="fld"><label class="lb">'+esc(g.nm)+'（'+g.m.length+' 条）</label>'
+      +'<div class="row"><input data-gn="'+k+'" value="'+esc(g.nm)+'">'
+      +'<button data-gd="'+k+'" style="flex:none;padding:10px 12px;border-radius:10px;border:1px solid var(--red);'
+      +'background:var(--red2);color:var(--red);font-size:13px">删</button></div></div>';
+  }).join("");
+  sheetOpen(
+    '<div class="hd"><b>分组管理</b><button id="gpClose">完成</button></div>'
+    +'<div class="bd">'+rows
+    +'<button class="big s" id="gpNew" style="margin-top:6px">＋ 新建分组</button>'
+    +'<div class="hint">改分组名会直接写进预设（随发布同步到仓库）。删掉一个组，组里的条目会回到「未分组」。'
+    +'给条目换组，在「编辑条目」里选。</div></div>'
+  );
+  $("gpClose").onclick=function(){ sheetClose(); renderList(); };
+  $("gpNew").onclick=function(){
+    var nm=prompt("新分组的名字："); if(!nm) return;
+    GROUPS.push({id:"g"+Date.now().toString(36), nm:nm.trim(), m:[]});
+    saveGroups(); sheetClose(); openGroups(); renderList();
+  };
+  $("sheetCard").querySelectorAll("[data-gn]").forEach(function(el){
+    el.onchange=function(){
+      var k=+el.getAttribute("data-gn"); GROUPS[k].nm=el.value.trim()||GROUPS[k].nm;
+      saveGroups(); toast("分组已改名");
+    };
+  });
+  $("sheetCard").querySelectorAll("[data-gd]").forEach(function(el){
+    el.onclick=function(){
+      var k=+el.getAttribute("data-gd");
+      if(!confirm("删掉分组「"+GROUPS[k].nm+"」？组里的条目会回到「未分组」")) return;
+      GROUPS.splice(k,1); saveGroups(); sheetClose(); openGroups(); renderList();
+    };
+  });
+}
+
+/* ---------- 载入预设 ---------- */
+function loadPreset(j,fname){
+  if(!j||!Array.isArray(j.prompts)){ toast("这不是预设 JSON（没有 prompts 数组）"); return; }
+  P=j; PROMPTS=P.prompts;
+  if(!P.name) P.name=(fname?fname.replace(/\.json$/i,""):"未命名预设");
+  ensureGroups();
+  REMOTE=null;
+  renderList(); refreshPub();
+  toast("已载入："+P.name+"（"+PROMPTS.length+" 条）");
+}
+function loadFromText(t,fname){
+  var j;
+  try{ j=JSON.parse(t); }
+  catch(e){ toast("不是合法 JSON："+e.message); return false; }
+  loadPreset(j,fname);
+  return true;
+}
+async function pullFromRepo(){
+  ghRead();
+  if(!GH.owner||!GH.repo){ toast("先在「设置」里填仓库"); return; }
+  toast("正在拉取仓库当前版…");
+  try{
+    var upF=await ghGetFile("update.json");
+    var man=JSON.parse(upF.text);
+    if(!man.preset||!man.preset.file) throw new Error("update.json 里没有 preset.file");
+    var f=await ghGetFile(man.preset.file);
+    loadPreset(JSON.parse(f.text), man.preset.file.split("/").pop());
+  }catch(e){ toast("拉取失败："+e.message); }
+}
+
+/* ========================= 差异比对 ========================= */
+var SAME_KEYS=["content","role","marker","system_prompt","injection_position",
+  "injection_depth","injection_order","injection_trigger","forbid_overrides","extension"];
+function sameItem(a,b){
+  for(var i=0;i<SAME_KEYS.length;i++){
+    var k=SAME_KEYS[i], x=a[k], y=b[k];
+    if(y===undefined||y===null) continue;          /* 远端没写 → 等于没变 */
+    if(x===undefined||x===null) return false;
+    if(typeof x==="object"||typeof y==="object"){
+      if(JSON.stringify(x)!==JSON.stringify(y)) return false; continue; }
+    if(String(x)!==String(y)) return false;
+  }
+  return true;
+}
+function diffPrompts(oldA,newA){
+  var O=oldA||[], N=newA||[], byId={}, byName={};
+  O.forEach(function(p,i){
+    var k=p.identifier||p.name||"";
+    if(k&&byId[k]===undefined) byId[k]=i;
+    if(p.name&&byName[p.name]===undefined) byName[p.name]=i;
+  });
+  function find(p){
+    var k=p.identifier||p.name||"";
+    if(k&&byId[k]!==undefined) return byId[k];
+    if(p.name&&byName[p.name]!==undefined) return byName[p.name];
+    return -1;
+  }
+  var added=[], modified=[], used={};
+  N.forEach(function(p){
+    var i=find(p);
+    if(i<0){ added.push(p); return; }
+    used[i]=1;
+    if(!sameItem(O[i],p)) modified.push(p);
+  });
+  var removed=O.filter(function(p,i){ return !used[i]; });
+  return {added:added, removed:removed, modified:modified};
+}
+function namesOf(lst){
+  var n=lst.map(function(p){ return p.name||p.identifier||"(无名)"; });
+  return n.slice(0,10).join("、")+(n.length>10?(" 等 "+n.length+" 条"):"");
+}
+function diffHtml(d){
+  var h="";
+  if(d.added.length)    h+='<div><span class="k">新增</span><span class="v up">'+d.added.length+'：'+esc(namesOf(d.added))+'</span></div>';
+  if(d.removed.length)  h+='<div><span class="k">删除</span><span class="v rm">'+d.removed.length+'：'+esc(namesOf(d.removed))+'</span></div>';
+  if(d.modified.length) h+='<div><span class="k">改文</span><span class="v">'+d.modified.length+'：'+esc(namesOf(d.modified))+'</span></div>';
+  if(!h) h='<div class="v">和仓库线上版相比：<b>内容没有变化</b></div>';
+  return h;
+}
+
+/* ========================= 发布页 ========================= */
+async function pullRemote(force){
+  if(REMOTE&&!force) return REMOTE;
+  var upF=await ghGetFile("update.json");
+  var man=JSON.parse(upF.text);
+  if(!man.preset||!man.preset.file) throw new Error("update.json 里没有 preset.file");
+  var oldF=await ghGetFile(man.preset.file);
+  var oldP=JSON.parse(oldF.text);
+  var orb=null;
+  try{ orb=await ghGetFile("script/orb.js"); }catch(e){}
+  REMOTE={ man:man, oldP:oldP, orbText:orb?orb.text:"", updateText:upF.text };
+  return REMOTE;
+}
+function myScriptVer(){
+  if(!P) return "";
+  var sc=P.extensions&&P.extensions.tavern_helper
+    &&P.extensions.tavern_helper.scripts&&P.extensions.tavern_helper.scripts[0];
+  if(!sc||!sc.content) return "";
+  var m=/ORB_VER\s*=\s*"(v[\d.]+)"/.exec(sc.content);
+  return m?m[1]:"";
+}
+function autoVer(){
+  if(!P) return "";
+  var cur=vparse(P.name)||"";
+  if(!REMOTE) return cur;
+  var old=REMOTE.man.preset.version||"";
+  var d=diffPrompts(REMOTE.oldP.prompts||[],PROMPTS);
+  var changed=!!(d.added.length||d.removed.length||d.modified.length);
+  if(cur&&cur===old&&changed) return vbump(old);
+  return cur||old;
+}
+async function refreshPub(){
+  $("pubRepo").textContent=GH.owner+"/"+GH.repo+" @"+(GH.branch||"main");
+  $("pubCur").textContent = P ? ((vparse(P.name)||"无版本号")+" · "+PROMPTS.length+" 条") : "—";
+  var mv=myScriptVer();
+  var hasSc=!!(P&&P.extensions&&P.extensions.tavern_helper
+    &&P.extensions.tavern_helper.scripts&&P.extensions.tavern_helper.scripts[0]);
+  $("pubScript").textContent = !P ? "—" : (hasSc?("你文件里带了脚本 "+(mv||"(版本未知)")):"你文件里没有脚本 → 建议勾选附带");
+  if(!P){ $("diffBox").textContent="先载入预设"; $("pubRemote").textContent="未查询"; return; }
+  try{
+    var R=await pullRemote();
+    $("pubRemote").textContent=R.man.preset.version+" · "+(R.oldP.prompts||[]).length+" 条";
+    var d=diffPrompts(R.oldP.prompts||[],PROMPTS);
+    $("diffBox").innerHTML=diffHtml(d);
+    var pv=$("pvIn");
+    if(!pv.value) pv.setAttribute("placeholder", autoVer());
+    var hint=$("pvHint");
+    var auto=autoVer(), cur=vparse(P.name)||"";
+    if(cur&&cur===R.man.preset.version&&(d.added.length||d.removed.length||d.modified.length))
+      hint.textContent="内容有改动但版本号和线上一样 → 发布时会自动升到 "+auto;
+    else hint.textContent="留空就用 "+auto+"；想自己定就直接填";
+  }catch(e){
+    $("pubRemote").textContent="查询失败："+e.message;
+    $("diffBox").textContent="（拉不到仓库当前版，发布时会再试一次）";
+  }
+}
+async function doPublish(){
+  ghRead();
+  if(!P){ toast("先载入预设"); return; }
+  if(!GH.token){ toast("先在「设置」里填 GitHub Token"); return; }
+  if(!GH.owner||!GH.repo){ toast("先在「设置」里填仓库"); return; }
+  var btn=$("bPub"); btn.disabled=true; $("pubLog").innerHTML="";
+  try{
+    logTo("pubLog","=== 开始发布 ===");
+    logTo("pubLog","拉取仓库当前状态…");
+    REMOTE=null;
+    var R=await pullRemote(true);
+    var oldVer=R.man.preset.version||"";
+    var oldSv=(R.man.script&&R.man.script.version)||"";
+
+    /* 版本号 */
+    var curVer=vparse(P.name)||"";
+    var d=diffPrompts(R.oldP.prompts||[],PROMPTS);
+    var changed=!!(d.added.length||d.removed.length||d.modified.length);
+    logTo("pubLog","差异：新增 "+d.added.length+" / 删除 "+d.removed.length+" / 改文 "+d.modified.length);
+    var manual=($("pvIn").value||"").trim(), pv;
+    if(manual){ pv=vparse(manual)||("v"+manual.replace(/^v/i,"")); }
+    else if(curVer&&curVer===oldVer&&changed){ pv=vbump(oldVer);
+      logTo("pubLog","版本号和线上一样、内容有改动 → 自动升到 "+pv); }
+    else pv=curVer||oldVer;
+    if(!pv){ throw new Error("读不出版本号：把预设名或文件名写成「斯德哥尔摩症v2.3」这样"); }
+    P.name="斯德哥尔摩症"+pv;
+
+    /* 脚本 */
+    var useScript=$("ckScript").checked, sv=oldSv;
+    if(useScript){
+      if(!R.orbText) throw new Error("仓库里没读到 script/orb.js");
+      var m=/ORB_VER\s*=\s*"(v[\d.]+)"/.exec(R.orbText);
+      sv=m?m[1]:oldSv;
+      var oShell=R.oldP.extensions&&R.oldP.extensions.tavern_helper
+        &&R.oldP.extensions.tavern_helper.scripts&&R.oldP.extensions.tavern_helper.scripts[0];
+      if(!oShell) throw new Error("仓库旧预设里没有脚本外壳，没法内嵌");
+      var shell=JSON.parse(JSON.stringify(oShell));
+      shell.content=R.orbText;
+      P.extensions=P.extensions||{};
+      P.extensions.tavern_helper=JSON.parse(JSON.stringify(R.oldP.extensions.tavern_helper));
+      P.extensions.tavern_helper.scripts=[shell];
+      logTo("pubLog","内嵌脚本 "+sv+"（来自仓库当前线上版）");
+    }else{
+      var mySc=P.extensions&&P.extensions.tavern_helper
+        &&P.extensions.tavern_helper.scripts&&P.extensions.tavern_helper.scripts[0];
+      if(mySc&&mySc.content){ var m2=/ORB_VER\s*=\s*"(v[\d.]+)"/.exec(mySc.content); if(m2) sv=m2[1]; }
+      logTo("pubLog","沿用你文件里的脚本："+(sv||"没有"));
+    }
+
+    /* 组装文件 */
+    var files=[];
+    var repoObj=JSON.parse(JSON.stringify(P));
+    var rm=d.removed.map(function(x){ return x.identifier||x.name; }).filter(Boolean);
+    if(rm.length){ repoObj.remove=rm;
+      logTo("pubLog","这 "+rm.length+" 条写进 remove（别人更新时才会真删）"); }
+    var pRel="preset/preset-"+pv+".json";
+    files.push({path:pRel, content:JSON.stringify(repoObj,null,1)});
+    if(useScript) files.push({path:"script/orb.js", content:R.orbText});
+    if(useScript&&sv&&oldSv&&sv!==oldSv&&R.orbText)
+      files.push({path:"archive/orb-"+oldSv+".js", content:R.orbText});
+    var bundle=JSON.parse(JSON.stringify(P)); delete bundle.remove;
+    var enRel="preset/stockholm_preset_"+pv.replace(/^v/,"")+"_with_orb_"+String(sv).replace(/^v/,"")+".json";
+    files.push({path:enRel, content:JSON.stringify(bundle,null,1)});
+
+    /* update.json */
+    var log=($("logIn").value||"").trim();
+    var plog=log?log.split("\n").map(function(s){return s.trim();}).filter(Boolean):[];
+    if(!plog.length) plog=["（本次没写说明）"];
+    var slog=(sv!==oldSv)?["脚本更新到 "+sv]:((R.man.script&&R.man.script.changelog)||[]);
+    var tag="v"+pv.replace(/^v/,"")+"-orb"+String(sv).replace(/^v/,"");
+    var up=JSON.parse(JSON.stringify(R.man));
+    var hist=(up.history||[]).filter(function(h){ return h.tag!==tag; });
+    hist.forEach(function(h){ h.latest=false; });
+    up.preset={version:pv, file:pRel, changelog:plog};
+    if(sv!==oldSv) up.script={version:sv, file:"script/orb.js", changelog:slog};
+    up.history=[{ tag:tag, date:today(), latest:true,
+      preset:{version:pv, file:pRel},
+      script:{version:sv, file:"script/orb.js"},
+      changelog:plog.concat(slog),
+      release:"https://github.com/"+GH.owner+"/"+GH.repo+"/releases/tag/"+tag }].concat(hist);
+    files.push({path:"update.json", content:JSON.stringify(up,null,1)});
+
+    /* 提交 */
+    var msg="预设 "+pv+" + 脚本 "+sv+"\n\n"+plog.map(function(x){ return "- "+x; }).join("\n")+"\n";
+    logTo("pubLog","提交 "+files.length+" 个文件…（预设 "+pv+" · 脚本 "+sv+"）");
+    var sha=await ghCommit(files,msg);
+    logTo("pubLog","✓ 已提交 "+String(sha).slice(0,7),"ok");
+    logTo("pubLog","仓库机器人正在生成下载包，约 1 分钟后出现：");
+    logTo("pubLog","→ https://github.com/"+GH.owner+"/"+GH.repo+"/releases/tag/"+tag,"ok");
+    toast("发布成功！");
+    REMOTE=null;
+  }catch(e){
+    logTo("pubLog","× "+e.message,"er");
+    toast("发布失败："+e.message);
+  }
+  btn.disabled=false;
+}
+function doDownload(){
+  if(!P){ toast("先载入预设"); return; }
+  var sv=myScriptVer();
+  var bundle=JSON.parse(JSON.stringify(P)); delete bundle.remove;
+  var pv=vparse(P.name)||"";
+  var name="斯德哥尔摩症"+pv+"_含状态球"+(sv||"无脚本")+"_手机导入.json";
+  var blob=new Blob([JSON.stringify(bundle,null,1)],{type:"application/json"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1200);
+  toast("已生成："+name);
+}
+
+/* ========================= 初始化 ========================= */
+function initTheme(){
+  var n=null; try{ n=localStorage.getItem("sk_pub_night"); }catch(e){}
+  if(n==="1") document.documentElement.classList.add("night");
+  $("btnTheme").onclick=function(){
+    var on=document.documentElement.classList.toggle("night");
+    try{ localStorage.setItem("sk_pub_night", on?"1":"0"); }catch(e){}
+  };
+}
+function bindTabs(){
+  document.querySelectorAll(".tabs button").forEach(function(b){
+    b.onclick=function(){
+      document.querySelectorAll(".tabs button").forEach(function(x){ x.classList.remove("on"); });
+      b.classList.add("on");
+      var id=b.getAttribute("data-pg");
+      document.querySelectorAll(".pg").forEach(function(s){ s.classList.remove("on"); });
+      $("pg-"+id).classList.add("on");
+      if(id==="pub") refreshPub();
+    };
+  });
+}
+function bindBtns(){
+  $("aLoad").onclick=function(){ pickFile(".json,application/json",function(t,n){ loadFromText(t,n); }); };
+  $("aPull").onclick=pullFromRepo;
+  $("aFold").onclick=function(){
+    var anyOpen=GROUPS.some(function(g){ return gIsOpen(g.id); });
+    GROUPS.forEach(function(g){ GOPEN[g.id]=!anyOpen; });
+    GOPEN["__none"]=!anyOpen; renderList();
+  };
+  $("bAdd").onclick=function(){ openEditor(-1); };
+  $("bGrp").onclick=openGroups;
+  $("sch").oninput=function(){ renderList(); };
+  $("bPub").onclick=doPublish;
+  $("bDl").onclick=doDownload;
+  $("sheet").onclick=function(e){ if(e.target===$("sheet")) sheetClose(); };
+  /* 设置页 */
+  $("tkEye").onclick=function(){
+    var i=$("tkIn");
+    if(i.type==="password"){ i.type="text"; this.textContent="隐藏"; }
+    else{ i.type="password"; this.textContent="显示"; }
+  };
+  ["tkIn","owIn","rpIn","brIn"].forEach(function(id){ $(id).onchange=ghRead; });
+  $("bTest").onclick=async function(){
+    ghRead(); $("setLog").innerHTML="";
+    logTo("setLog","测试 "+GH.owner+"/"+GH.repo+" @"+GH.branch+" …");
+    try{
+      var d=await ghFetch("GET", api(""));
+      logTo("setLog","✓ 仓库可访问："+d.full_name,"ok");
+      if(!GH.token){ logTo("setLog","! 没填 token：只能读，不能发布"); }
+      else{
+        var me=await ghFetch("GET","https://api.github.com/user");
+        logTo("setLog","✓ token 归属："+me.login,"ok");
+        try{ await ghFetch("GET", api("/contents/update.json?ref="+encodeURIComponent(GH.branch)));
+             logTo("setLog","✓ 能读到 update.json","ok"); }
+        catch(e){ logTo("setLog","× 读 update.json 失败："+e.message,"er"); }
+      }
+    }catch(e){ logTo("setLog","× "+e.message,"er"); }
+  };
+}
+/* ---- 自动化测试钩子（对使用者没有任何影响） ---- */
+window.__PTS={
+  load:loadFromText, render:renderList, refresh:refreshPub,
+  groups:function(){ return GROUPS; }, prompts:function(){ return PROMPTS; },
+  preset:function(){ return P; }, remote:function(){ return REMOTE; },
+  edit:openEditor, save:saveEditor, del:delItem,
+  diff:diffPrompts, same:sameItem, vparse:vparse, vbump:vbump,
+  b64enc:b64enc, b64dec:b64dec, gidOf:gidOf, gMove:gMove, slug:slug,
+  addToOrder:addToOrder, delFromOrder:delFromOrder,
+  autoVer:autoVer, myScriptVer:myScriptVer,
+  pullRemote:pullRemote, publish:doPublish, download:doDownload,
+  gh:function(){ return GH; }, setGh:function(o){ for(var k in o) GH[k]=o[k]; ghSave(); },
+  sheetClose:sheetClose
+};
+
+function init(){
+  ghLoad(); ghFill(); initTheme(); bindTabs(); bindBtns();
+  renderList(); refreshPub();
+}
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",init);
+else init();
+
+})();
+</script>
+</body>
+</html>
