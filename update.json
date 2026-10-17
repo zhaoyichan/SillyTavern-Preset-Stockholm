@@ -5,20 +5,19 @@
   "version": "v2.5",
   "file": "preset/preset-v2.5.json",
   "changelog": [
-   "2.4太仁慈了",
-   "2.5这一版被骂爽了，应该不会有bug需要修改了，上"
+   "主预设改成纯预设：不再内嵌脚本，脚本只在 script/orb.js（历史老版本文件保持原样）"
   ]
  },
  "script": {
-  "version": "v2.4",
+  "version": "v2.5",
   "file": "script/orb.js",
   "changelog": [
-   "修复：预设更新只写内存不落盘（退出酒馆就回到旧版、每次都提示要更新）；修复：更新完版本号不前进导致反复提示；修复：作者公告拉不到（公告文件被当成坏索引扔掉了）"
+   "公告改成每次打开酒馆都弹：点红色「知道了」或点空白处只是关这一次，下次开照弹；只有底部那行小字「我已知晓，不再显示」才真的不再弹。以前点过、手快划掉过的人这次也会重新看到一遍"
   ]
  },
  "history": [
   {
-   "tag": "v2.5-orb2.4",
+   "tag": "v2.5-orb2.5",
    "date": "2026-10-17",
    "latest": true,
    "preset": {
@@ -26,8 +25,26 @@
     "file": "preset/preset-v2.5.json"
    },
    "script": {
-    "version": "v2.4",
+    "version": "v2.5",
     "file": "script/orb.js"
+   },
+   "changelog": [
+    "主预设改成纯预设：不再内嵌脚本，脚本只在 script/orb.js（历史老版本文件保持原样）",
+    "公告改成每次打开酒馆都弹：点红色「知道了」或点空白处只是关这一次，下次开照弹；只有底部那行小字「我已知晓，不再显示」才真的不再弹。以前点过、手快划掉过的人这次也会重新看到一遍"
+   ],
+   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.5-orb2.5"
+  },
+  {
+   "tag": "v2.5-orb2.4",
+   "date": "2026-10-17",
+   "latest": false,
+   "preset": {
+    "version": "v2.5",
+    "file": "preset/preset-v2.5.json"
+   },
+   "script": {
+    "version": "v2.4",
+    "file": "archive/orb-v2.4.js"
    },
    "changelog": [
     "2.4太仁慈了",
