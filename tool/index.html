@@ -484,6 +484,18 @@ html.night .sheet .hd button.sv{background:linear-gradient(180deg,#3a3a42,#26283
         <div class="hint">文件名类似「状态球v2.2.js」，存下来可以直接导入酒馆的脚本库。</div>
       </div>
 
+      <div class="card">
+        <div class="cap">拆文件（把预设和脚本分开）</div>
+        <div class="lb">从哪拆</div>
+        <select class="in" id="spFrom"><option value="local">我自己选一个本地 json</option></select>
+        <div class="row" style="margin-top:9px">
+          <button class="secondary" id="bSpPick">选本地文件…</button>
+          <button class="primary" id="bSpGo">拆开</button>
+        </div>
+        <div class="hint">上面那两个按钮拉的是仓库里的原文件，<b>老版本本来就塞着脚本</b>。这个工具能把任何一个 json 拆成「纯预设」和「脚本」两份，各自单独存下来。</div>
+        <div id="spOut"></div>
+      </div>
+
       <div class="card flat">
         <div class="cap">跟「下载整合件」有什么区别</div>
         <div class="hint" style="font-size:12.5px;line-height:1.9">
@@ -1134,9 +1146,12 @@ async function doPublish(){
       if(!R.orbText) throw new Error("仓库里没读到 script/orb.js");
       var m=/ORB_VER\s*=\s*"(v[\d.]+)"/.exec(R.orbText);
       sv=m?m[1]:oldSv;
-      var oShell=R.oldP.extensions&&R.oldP.extensions.tavern_helper
-        &&R.oldP.extensions.tavern_helper.scripts&&R.oldP.extensions.tavern_helper.scripts[0];
-      if(!oShell) throw new Error("仓库旧预设里没有脚本外壳，没法内嵌");
+      /* 外壳从两处找：仓库旧预设（老版本里带）→ 你自己载入的文件（从酒馆导出来的一定带） */
+      var oShell=(R.oldP.extensions&&R.oldP.extensions.tavern_helper
+        &&R.oldP.extensions.tavern_helper.scripts&&R.oldP.extensions.tavern_helper.scripts[0])
+        ||(P.extensions&&P.extensions.tavern_helper
+        &&P.extensions.tavern_helper.scripts&&P.extensions.tavern_helper.scripts[0]);
+      if(!oShell) throw new Error("找不到脚本外壳：仓库旧预设和你载入的文件里都没有脚本");
       var shell=JSON.parse(JSON.stringify(oShell));
       shell.content=R.orbText;
       P.extensions=P.extensions||{};
@@ -1156,6 +1171,12 @@ async function doPublish(){
     var rm=d.removed.map(function(x){ return x.identifier||x.name; }).filter(Boolean);
     if(rm.length){ repoObj.remove=rm;
       logTo("pubLog","这 "+rm.length+" 条写进 remove（别人更新时才会真删）"); }
+    /* 主预设存纯的：剥掉内嵌脚本，脚本只存在于 script/orb.js。
+       只影响本次发的这一版，仓库里的历史版本保持原样不动。 */
+    var st=stripScripts(repoObj);
+    logTo("pubLog", st.n
+      ? ("主预设剥掉内嵌脚本 "+(st.ver||"(版本未知)")+" → 存纯预设（历史版本不动）")
+      : "主预设本来就没带脚本");
     var pRel="preset/preset-"+pv+".json";
     files.push({path:pRel, content:JSON.stringify(repoObj,null,1)});
     if(useScript) files.push({path:"script/orb.js", content:R.orbText});
@@ -1309,6 +1330,7 @@ async function dlFill(){
   });
   if(!pv.options.length) pv.appendChild(new Option("（没有可选版本）",""));
   if(!sv.options.length) sv.appendChild(new Option("（没有可选版本）",""));
+  splitFill();
   return DLM;
 }
 function saveBlob(text,name){
@@ -1333,8 +1355,149 @@ async function dlOne(kind){
     logTo("dlLog","✓ 已存下 "+name+"（"+Math.round(f.text.length/1024)+" KB）","ok");
     logTo("dlLog",(kind==="p")?"就只有预设，没塞脚本":"就只有脚本，没打包预设");
     toast("已下载："+name);
+    if(kind==="p") warnEmbedded(f.text, o.v);
     return name;
   }catch(e){ logTo("dlLog","× "+e.message,"er"); return ""; }
+}
+/* 老版本的预设文件里本身就塞着脚本，提醒一句并帮他把拆文件的下拉对准这一版 */
+function warnEmbedded(text,ver){
+  var v="";
+  try{ var sc=scriptsOf(JSON.parse(text)); if(sc.length) v=orbVerOf(sc[0])||"(版本未知)"; }catch(e){}
+  if(!v) return;
+  logTo("dlLog","⚠ 这个文件的本体里还带着脚本 "+v+"（新发的版本已经是纯预设了）","er");
+  logTo("dlLog","  想要干净预设 → 用下面的「拆文件」把它剥掉");
+  var sp=$("spFrom"); if(!sp) return;
+  for(var i=0;i<sp.options.length;i++){
+    var val=sp.options[i].value; if(!val||val==="local") continue;
+    try{ if(JSON.parse(val).pv===ver){ sp.value=val; break; } }catch(e){}
+  }
+}
+
+/* ========================= 拆文件（预设 / 脚本分开） ========================= */
+var SPLIT=null;
+function scriptsOf(j){
+  try{ return (j&&j.extensions&&j.extensions.tavern_helper&&j.extensions.tavern_helper.scripts)||[]; }
+  catch(e){ return []; }
+}
+function orbVerOf(sc){
+  var m=/ORB_VER\s*=\s*"(v[\d.]+)"/.exec(String((sc&&sc.content)||""));
+  return m?m[1]:"";
+}
+function safeName(s){
+  return String(s||"").replace(/[\\/:*?"<>|\r\n]+/g,"").trim()||"未命名";
+}
+/* 剥掉一个对象里的酒馆脚本，返回剥了几个 */
+function stripScripts(obj){
+  var out={n:0, ver:""};
+  try{
+    var th=obj&&obj.extensions&&obj.extensions.tavern_helper;
+    if(th&&Array.isArray(th.scripts)&&th.scripts.length){
+      out.n=th.scripts.length; out.ver=orbVerOf(th.scripts[0]);
+      delete th.scripts;
+      if(!Object.keys(th).length) delete obj.extensions.tavern_helper;
+      if(!Object.keys(obj.extensions||{}).length) delete obj.extensions;
+    }
+  }catch(e){}
+  return out;
+}
+/* 把一个（可能带脚本的）预设拆成「纯预设 + 若干脚本」 */
+function splitBundle(j,srcName){
+  var sc=scriptsOf(j);
+  var pure=JSON.parse(JSON.stringify(j||{}));
+  stripScripts(pure);
+  var pv=vparse(j&&j.name)||vparse(srcName)||"";
+  var out={ had:sc.length, pv:pv, preset:null, scripts:[] };
+  out.preset={ text:JSON.stringify(pure,null,1),
+    fname:safeName((j&&j.name)||"预设")+"_纯预设.json",
+    n:((pure.prompts)||[]).length };
+  sc.forEach(function(s,i){
+    var v=orbVerOf(s);
+    out.scripts.push({ ver:v, text:String(s.content||""),
+      fname:safeName(s.name||("脚本"+(i+1)))+(v?("_"+v):"")+".js" });
+  });
+  return out;
+}
+function renderSplit(){
+  var box=$("spOut"); if(!box) return;
+  if(!SPLIT){ box.innerHTML=""; return; }
+  var s=SPLIT, h="";
+  h='<div class="hint" style="color:var(--ink2);margin-bottom:4px">'+
+    (s.had? ("拆开了：预设 "+s.preset.n+" 条 · 脚本 "+s.scripts.length+" 个")
+          : ("这个文件里<b>没有酒馆脚本</b>，本来就是纯预设（"+s.preset.n+" 条）"))+'</div>';
+  h+='<div class="row-it"><div class="tx"><div class="nm">'+esc(s.preset.fname)+'</div>'+
+     '<div class="mt">纯预设 · '+s.preset.n+' 条 · '+Math.round(s.preset.text.length/1024)+' KB</div></div>'+
+     '<button class="btn ghost" style="flex:none" data-dl="p">存下</button></div>';
+  s.scripts.forEach(function(sc,i){
+    h+='<div class="row-it"><div class="tx"><div class="nm">'+esc(sc.fname)+'</div>'+
+       '<div class="mt">脚本'+(sc.ver?(" · "+sc.ver):"")+' · '+Math.round(sc.text.length/1024)+' KB</div></div>'+
+       '<button class="btn ghost" style="flex:none" data-dl="s'+i+'">存下</button></div>';
+  });
+  box.innerHTML=h;
+  box.querySelectorAll("[data-dl]").forEach(function(b){
+    b.onclick=function(){
+      var k=b.getAttribute("data-dl");
+      if(k==="p"){ saveBlob(SPLIT.preset.text, SPLIT.preset.fname); toast("已存下 "+SPLIT.preset.fname); }
+      else{ var x=SPLIT.scripts[+k.slice(1)]; saveBlob(x.text, x.fname); toast("已存下 "+x.fname); }
+    };
+  });
+}
+function splitText(text,name){
+  var j;
+  try{ j=JSON.parse(text); }catch(e){ toast("这不是有效的 json 文件"); return null; }
+  SPLIT=splitBundle(j,name);
+  renderSplit();
+  logTo("dlLog","拆 "+name+"："+(SPLIT.had
+    ? ("预设 "+SPLIT.preset.n+" 条 · 脚本 "+SPLIT.scripts.length+" 个")
+    : "里面没有脚本，本来就是纯预设"), SPLIT.had?"ok":"");
+  return SPLIT;
+}
+/* 仓库里的候选文件：主预设（老版本带脚本）→ 整合件 */
+function bundleCandidates(o){
+  var pv=String(o.pv||"").replace(/^v/i,""), sv=String(o.sv||"").replace(/^v/i,""), a=[];
+  if(o.file) a.push(o.file);
+  if(pv&&sv){
+    a.push("preset/stockholm_preset_"+pv+"_with_orb_"+sv+".json");
+    a.push("preset/stockholm_preset_v"+pv+"_with_orb_v"+sv+".json");
+    a.push("preset/stockholm_preset_v"+pv+"_with_orb_"+sv+".json");
+  }
+  return a;
+}
+async function splitGo(){
+  var sel=$("spFrom"), val=sel?sel.value:"";
+  if(!val||val==="local"){
+    pickFile(".json,application/json", function(t,n){ splitText(t,n); });
+    return null;
+  }
+  var o; try{ o=JSON.parse(val); }catch(e){ toast("版本信息坏了，重进一次这页"); return null; }
+  var tries=bundleCandidates(o), first=null, got=null, used="";
+  for(var i=0;i<tries.length;i++){
+    var f=null, j=null;
+    try{ f=await ghGetFile(tries[i]); }catch(e){ continue; }
+    try{ j=JSON.parse(f.text); }catch(e){ continue; }
+    if(!first){ first=j; used=tries[i]; }
+    if(scriptsOf(j).length){ got=j; used=tries[i]; break; }   /* 找得到带脚本的就用它 */
+  }
+  if(!first){ logTo("dlLog","× 仓库里没找到 "+(o.tag||o.pv)+" 的预设文件","er"); return null; }
+  logTo("dlLog","用 "+used);
+  SPLIT=splitBundle(got||first, used);
+  renderSplit();
+  if(got) logTo("dlLog","✓ 拆出预设 "+SPLIT.preset.n+" 条 + 脚本 "+SPLIT.scripts.length+" 个","ok");
+  else    logTo("dlLog","这一版本身就是纯预设，没有脚本可拆");
+  toast(got?"拆好了":"这个版本没带脚本");
+  return SPLIT;
+}
+function splitFill(){
+  var sel=$("spFrom"); if(!sel||!DLM) return;
+  var keep=sel.value;
+  sel.innerHTML='<option value="local">我自己选一个本地 json</option>';
+  var hist=Array.isArray(DLM.history)?DLM.history:[];
+  hist.forEach(function(h){
+    var p=h.preset, s=h.script, tag=(h===hist[0])?"（最新）":"";
+    if(!p||!p.version||!p.file) return;
+    sel.appendChild(new Option("预设 "+p.version+" + 脚本 "+((s&&s.version)||"?")+tag,
+      JSON.stringify({ tag:h.tag||"", pv:p.version, sv:(s&&s.version)||"", file:p.file })));
+  });
+  if(keep){ for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===keep){ sel.value=keep; break; } } }
 }
 
 /* ========================= 初始化 ========================= */
@@ -1349,7 +1512,7 @@ function initTheme(){
 var PG_TITLE={ preset:["发布台",""],
                pub:["发布","推到仓库，机器人随后自动打包"],
                notice:["公告","改完保存，所有人下次打开酒馆就看到"],
-               dl:["下载","预设和脚本分开下，都不打包"],
+               dl:["下载","预设和脚本分开下，还能把老文件拆开"],
                set:["设置","Token 只存在这台手机的浏览器里"] };
 function bindTabs(){
   document.querySelectorAll(".tabs button").forEach(function(b){
@@ -1391,6 +1554,8 @@ function bindBtns(){
   $("bNtPull").onclick=function(){ noticePull(); };
   $("bDlP").onclick=function(){ dlOne("p"); };
   $("bDlS").onclick=function(){ dlOne("s"); };
+  $("bSpPick").onclick=function(){ pickFile(".json,application/json", function(t,n){ splitText(t,n); }); };
+  $("bSpGo").onclick=function(){ splitGo(); };
   $("sheet").onclick=function(e){ if(e.target===$("sheet")) sheetClose(); };
   /* 设置页 */
   $("tkEye").onclick=function(){
@@ -1430,6 +1595,10 @@ window.__PTS={
   noticePull:noticePull, noticeSave:noticeSave, noticeForm:noticeForm,
   notice:function(){ return NT; },
   dlFill:dlFill, dlOne:dlOne,
+  splitFill:splitFill, splitGo:splitGo, splitText:splitText, splitBundle:splitBundle,
+  scriptsOf:scriptsOf, orbVerOf:orbVerOf, stripScripts:stripScripts,
+  bundleCandidates:bundleCandidates, warnEmbedded:warnEmbedded,
+  split:function(){ return SPLIT; },
   gh:function(){ return GH; }, setGh:function(o){ for(var k in o) GH[k]=o[k]; ghSave(); },
   sheetClose:sheetClose
 };
