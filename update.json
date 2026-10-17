@@ -10,15 +10,15 @@
   ]
  },
  "script": {
-  "version": "v2.3",
+  "version": "v2.4",
   "file": "script/orb.js",
   "changelog": [
-   "新增作者公告：启动后从仓库拉一次公告（群号可一键复制/加群），改公告不用发新版脚本，在发布台改完保存即可；「关于」里加了常驻入口"
+   "修复：预设更新只写内存不落盘（退出酒馆就回到旧版、每次都提示要更新）；修复：更新完版本号不前进导致反复提示；修复：作者公告拉不到（公告文件被当成坏索引扔掉了）"
   ]
  },
  "history": [
   {
-   "tag": "v2.5-orb2.3",
+   "tag": "v2.5-orb2.4",
    "date": "2026-10-17",
    "latest": true,
    "preset": {
@@ -26,8 +26,27 @@
     "file": "preset/preset-v2.5.json"
    },
    "script": {
-    "version": "v2.3",
+    "version": "v2.4",
     "file": "script/orb.js"
+   },
+   "changelog": [
+    "2.4太仁慈了",
+    "2.5这一版被骂爽了，应该不会有bug需要修改了，上",
+    "修复：预设更新只写内存不落盘（退出酒馆就回到旧版、每次都提示要更新）；修复：更新完版本号不前进导致反复提示；修复：作者公告拉不到（公告文件被当成坏索引扔掉了）"
+   ],
+   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.5-orb2.4"
+  },
+  {
+   "tag": "v2.5-orb2.3",
+   "date": "2026-10-17",
+   "latest": false,
+   "preset": {
+    "version": "v2.5",
+    "file": "preset/preset-v2.5.json"
+   },
+   "script": {
+    "version": "v2.3",
+    "file": "archive/orb-v2.3.js"
    },
    "changelog": [
     "2.4太仁慈了",

@@ -465,6 +465,64 @@ function call(name){
   return {run:function(){ return a.fn.apply(a.owner, arguments); }, api:a};
 }
 
+/* ==================================================================
+   v2.4：预设写入必须落盘
+   ⚠ 酒馆助手的 updatePresetWith('in_use', ...) 只改内存、不写文件：
+     preset.ts 里只有 preset_name !== 'in_use' 时才 savePreset。
+     后果＝「更新成功」的提示弹完了，退出酒馆再进来又是旧版、又提示更新（教训 #21）。
+   所以每次改预设都写两处：in_use（当前立刻生效）＋ 真实预设名（触发存盘）。
+   ================================================================== */
+function loadedPresetName(){
+  try{ var f=call("getLoadedPresetName"); var n=f?f.run():"";
+       if(n && n!=="in_use") return String(n); }catch(e){}
+  return "";
+}
+function presetNamesHas(n){
+  try{ var f=call("getPresetNames"); var a=f?f.run():null;
+       return !!(Array.isArray(a) && a.indexOf(n)>=0); }catch(e){ return false; }
+}
+/* 版本号记在预设里（extensions.sk_orb.pver）。
+   以前只认预设名末尾的 vX.Y，可合并更新时名字是保留本地的，
+   于是版本号永远停在旧值、每次启动都误报「预设可更新」（教训 #22）。 */
+function pverGet(p){
+  try{ var x=p && p.extensions && p.extensions.sk_orb;
+       return (x && x.pver)?String(x.pver):""; }catch(e){ return ""; }
+}
+function pverSet(preset, pv){
+  try{
+    if(!pv) return false;
+    preset.extensions=preset.extensions||{};
+    var x=preset.extensions.sk_orb;
+    if(!x || typeof x!=="object") x={};
+    x.pver=String(pv);
+    preset.extensions.sk_orb=x;
+    return true;
+  }catch(e){ return false; }
+}
+/* 一次修改写两处：返回 {first:in_use 结果, second:真预设结果, name:存盘的预设名} */
+function presetWriteBoth(updater){
+  var opts={render:"immediate"};
+  var c=call("updatePresetWith");
+  var first=c.run("in_use", updater, opts);
+  var name=loadedPresetName(), ok=!!(name && presetNamesHas(name)), second=null;
+  if(ok){ try{ second=c.run(name, updater, opts); }catch(e){ ok=false; } }
+  /* 存没存成看 ok，不看 second 是不是 null —— 老版本助手可能同步返回空 */
+  return {first:first, second:second, name:(ok?name:"")};
+}
+/* 等两处都写完：cb(ok, errMsg, savedName, np)，np 是写完后的新预设（拿它刷新界面） */
+function presetSettle(w, cb){
+  Promise.resolve(w.first).then(function(np){
+    if(w.second && w.second.then){
+      Promise.resolve(w.second).then(
+        function(){ cb(true,"",w.name,np); },
+        function(e){ cb(false,String((e&&e.message)||e),"",np); });
+      return;
+    }
+    cb(true,"",w.name,np);
+  }, function(e){ cb(false,String((e&&e.message)||e),"",null); });
+}
+function savedTip(name){ return name?("，已存回预设「"+name+"」"):""; }
+
 /* 从当前预设读全部条目 */
 function loadItems(){
   var c=call("getPreset"); if(!c) return false;
@@ -472,10 +530,18 @@ function loadItems(){
   if(!p||!p.prompts) return false;
   var ln=call("getLoadedPresetName");
   if(ln){ try{ var n=ln.run(); if(n) PRESET.name=n; }catch(e){} }
-  /* 版本号写在预设名末尾（…v2.0）。这里内联解析，不调 presetVer —— 测试会把
-     loadItems 单独抠出来 eval，依赖别的函数会直接崩。 */
-  try{ var vm=String(PRESET.name||"").match(/v([0-9]+(?:[.][0-9]+)*) *$/i);
-       if(vm) PRESET.version="v"+vm[1]; }catch(e){}
+  /* 版本号：优先读预设里记的 pver，没有才退回预设名末尾（…v2.0）。
+     这里内联解析，不调 presetVer —— 测试会把 loadItems 单独抠出来 eval，
+     依赖别的函数会直接崩。 */
+  try{
+    var __pv=pverGet(p);
+    if(__pv){ PRESET.version=__pv; PRESET.__pv=__pv; }
+    else{
+      var vm=String(PRESET.name||"").match(/v([0-9]+(?:[.][0-9]+)*) *$/i);
+      if(vm) PRESET.version="v"+vm[1];
+      PRESET.__pv="";
+    }
+  }catch(e){}
   /* ⚠ identifier 必须跟着走。
      酒馆靠 identifier==="chatHistory" 认「历史」条目、靠它索引排序表；
      ITEMS 里没有它，写回时就没法把改动贴回原条目，只能整体重建 —— 那就完了。 */
@@ -564,7 +630,8 @@ var HOOK={
     if(!c){ cb(false,"找不到 updatePresetWith"); return; }
     try{
       var n=0;
-      var r=c.run("in_use", function(preset){
+      var updater=function(preset){
+        var m=0;
         var src=Array.isArray(preset.prompts)?preset.prompts:[];
         /* 原条目索引：优先按 identifier，退化按 name（老预设可能没 identifier） */
         var byId={}, byName={}, i;
@@ -589,15 +656,21 @@ var HOOK={
           base.role=it.role;
           base.content=it.content;
           if(it.def!==null) base.enabled=!!it.on;   /* 内置条目不动 enabled */
-          out.push(base); n++;
+          out.push(base); m++;
         }
         preset.prompts=out;
+        n=m;                       /* 写两处会跑两次 updater，取最后一次的条数 */
         return preset;
-      }, {render:"immediate"});
+      };
       var msg="已写入预设（"+n+" 条，保留原字段）";
-      if(r && r.then) r.then(function(){cb(true,msg);},
-                             function(e){cb(false,"写入失败："+e);});
-      else cb(true,msg);
+      try{
+        var w=presetWriteBoth(updater);
+        presetSettle(w, function(ok,err,name){
+          if(!ok){ cb(false,"写入失败："+err); return; }
+          msg="已写入预设（"+n+" 条，保留原字段）";
+          cb(true, msg+savedTip(name));
+        });
+      }catch(e){ cb(false,"写入失败："+e); }
     }catch(e){ cb(false,"写入失败："+e); }
   },
 
@@ -665,6 +738,40 @@ var HOOK={
         throw new Error("update.json 里既没有 preset 也没有 script（键名写错？）");
       cb(true,j,null);
     }).catch(function(e){ cb(false,null,(e&&e.message)||String(e)); });
+  },
+
+  /* 拉任意 JSON —— 公告 notice.json 用它。
+     ⚠ 不能拿 fetchManifest 代劳：那个函数是给 update.json 写的，内部要求
+       JSON 里必须有 preset 或 script 键，否则判失败。拿它拉 notice.json
+       会被当成「不是合法索引」扔掉 → 公告永远拉不到（v2.4 修，教训 #23）。 */
+  fetchJson:function(url,cb){
+    if(!url){ cb(false,null,"还没填仓库地址"); return; }
+    fetch(url,{cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status+"（地址不对 / 文件被删 / 私有仓库）");
+      return r.text();
+    }).then(function(t){
+      var j;
+      try{ j=JSON.parse(t); }
+      catch(e){ throw new Error("拉到的不是 JSON（大概是 404 网页或 GitHub 的 HTML 页面）"); }
+      if(!j || typeof j!=="object") throw new Error("拉到的不是 JSON 对象");
+      cb(true,j,null);
+    }).catch(function(e){ cb(false,null,(e&&e.message)||String(e)); });
+  },
+
+  /* 只把版本号写进当前预设（一条条目都不动）。
+     用在「内容已经是这版、只是版本号没记上」的情况：补完就不再反复提示。 */
+  stampVer:function(pv, cb){
+    if(!pv){ cb&&cb(false,"没有版本号"); return; }
+    var c=call("updatePresetWith");
+    if(!c){ cb&&cb(false,"找不到 updatePresetWith"); return; }
+    try{
+      var w=presetWriteBoth(function(preset){ pverSet(preset, pv); return preset; });
+      presetSettle(w, function(ok,err,name){
+        try{ if(ok){ PRESET.version=String(pv); PRESET.__pv=String(pv); } }catch(e){}
+        cb&&cb(ok, ok ? ("已记下版本号 "+pv+savedTip(name))
+                      : ("版本号写入失败："+err));
+      });
+    }catch(e){ cb&&cb(false,"版本号写入失败："+e); }
   },
 
   /* 拉纯文本（脚本本体） */
@@ -765,7 +872,7 @@ var HOOK={
         n++; if(p.identifier) key[p.identifier]=1;
       });
       if(!n){ cb(false,"这些条目已经不在当前预设里了"); return; }
-      var w=c.run("in_use", function(preset){
+      var updater=function(preset){
         preset.prompts=(preset.prompts||[]).filter(function(p){
           if(p.identifier && key[p.identifier]) return false;
           if(!p.identifier && set[p.name||""]) return false;
@@ -778,12 +885,14 @@ var HOOK={
           });
         });
         return preset;
-      }, {render:"immediate"});
-      var done=function(){
-        cb(true, "已从预设里移除 "+n+" 条");
       };
-      if(w&&w.then) w.then(done, function(e){ cb(false,"写入失败："+e); });
-      else done();
+      try{
+        var w=presetWriteBoth(updater);
+        presetSettle(w, function(ok,err,name){
+          if(!ok){ cb(false,"写入失败："+err); return; }
+          cb(true, "已从预设里移除 "+n+" 条"+savedTip(name));
+        });
+      }catch(e){ cb(false,"写入失败："+e); }
     }catch(e){ cb(false,"清理失败："+e); }
   },
 
@@ -796,7 +905,7 @@ var HOOK={
     if(!local||!Array.isArray(local.prompts)){ cb(false,"读不到当前预设条目"); return; }
     try{
       var r=__skMerge(remote, local);
-      var w=c.run("in_use", function(preset){
+      var updater=function(preset){
         /* 1) 其它顶层字段跟着远端走（采样参数等），但预设名保留本地的 */
         Object.keys(remote).forEach(function(k){
           if(k==="prompts"||k==="prompt_order"||k==="name") return;
@@ -816,20 +925,36 @@ var HOOK={
         preset.prompts = r.prompts;
         /* 3) 排序表：远端顺序 + 本地自定义条目补在后面 */
         if(r.order) preset.prompt_order = r.order;
+        /* 4) v2.4：把版本号记进预设，下次启动才知道这版已经装上了。
+             不加这句＝更新完版本号还停在旧的，每次开机都提示「预设可更新」。 */
+        try{
+          var __pv=(typeof REMOTE!=="undefined" && REMOTE.pv) ? String(REMOTE.pv) : "";
+          if(!__pv){
+            var __mm=String(remote.name||"").match(/v(\d+(?:\.\d+)*)\s*$/i);
+            __pv=__mm?("v"+__mm[1]):"";
+          }
+          pverSet(preset, __pv);
+        }catch(e){}
         return preset;
-      }, {render:"immediate"});
+      };
       /* v2.0：updatePresetWith 返回的就是「更新后的预设」（官方文档保证）。
          以前写完之后又调 getPreset 重读一遍来刷新面板 —— 读回来的是旧的，
          界面自然也是旧的（酒馆自己的界面是新的，两边读的不是同一份东西）。
          现在直接用这个返回值；重读只在拿不到返回值时兜底。 */
-      var done=function(np){
+      var done=function(np, tip){
         if(remote.name) PRESET.version=remote.name;
+        try{ var __pv=pverGet(np); if(__pv){ PRESET.version=__pv; PRESET.__pv=__pv; } }catch(e){}
         var items=__skItemsOf(np) || __skItemsOf(r.prompts);
         cb(true, "已合并更新："+r.st.upd+" 条更新 / "+r.st.add+" 条新增 / "+r.st.kept+" 条新版没有"
-                + (r.st.rm ? (" / "+r.st.rm+" 条删除") : ""), items);
+                + (r.st.rm ? (" / "+r.st.rm+" 条删除") : "") + (tip||""), items);
       };
-      if(w&&w.then) w.then(done, function(e){ cb(false,"写入失败："+e); });
-      else done(null);
+      try{
+        var w=presetWriteBoth(updater);
+        presetSettle(w, function(ok,err,name,np){
+          if(!ok){ cb(false,"写入失败："+err); return; }
+          done(np, savedTip(name));
+        });
+      }catch(e){ cb(false,"写入失败："+e); }
     }catch(e){ cb(false,"合并失败："+e); }
   }
 };
@@ -1733,7 +1858,7 @@ function claimHtml(){
      "preset": {"version":"v1.9","file":"preset/斯德哥尔摩症_v1.9.json","changelog":["…"]},
      "script": {"version":"v1.0","file":"script/斯德哥尔摩·状态球.js","changelog":["…"]}
    }                                                                        */
-var ORB_VER="v2.3";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
+var ORB_VER="v2.4";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
 var REMOTE = {
   base:"https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
   mf:null,          /* 索引 */
@@ -2018,7 +2143,9 @@ function openUpdate(stage, arg){
     var wP=!!(REMOTE.want.preset && REMOTE.preset && !pNoChg);
     var wS=!!(REMOTE.want.script && REMOTE.script);
     var n=(wP?1:0)+(wS?1:0);
-    var label=n===2?"两个都更新":(wP?"更新预设":"更新脚本");
+    /* 一条都不用改（比如预设内容已经是这版、只差记个版本号）→ 按钮说人话 */
+    var label=n===2?"两个都更新":(wP?"更新预设":(wS?"更新脚本"
+            :((REMOTE.want.preset&&REMOTE.preset&&REMOTE.pv)?("标记为 "+REMOTE.pv):"更新")));
     dlg.innerHTML='<h3>可以更新</h3>'+h
       +'<div class="bt"><button id="upCancel2">以后再说</button>'
       +'<button class="go" id="upGo">'+esc(label)+'</button></div>';
@@ -2268,6 +2395,9 @@ function upFetch(){
    别拿 PRESET.version 的默认值去跟远端比 —— 那是演示占位值，比了永远不相等，
    会变成每次启动都误报「有新版本」。 */
 function presetVer(){
+  /* v2.4：优先用预设里记的版本号（extensions.sk_orb.pver，更新时写进去的）。
+     以前只看预设名末尾，可合并更新时名字保留本地 → 版本号永远停在旧值。 */
+  try{ if(PRESET.__pv) return String(PRESET.__pv); }catch(e){}
   var nm="";
   try{ nm=String(PRESET.name||""); }catch(e){}
   var m=nm.match(/v(\d+(?:\.\d+)*)\s*$/i);
@@ -2378,9 +2508,21 @@ function upApply(){
     });
   }
   function doPreset(){
-    /* v1.6：预设没有变动就干脆不写，只在结果里说一句「预设没有变动，已跳过」 */
+    /* v1.6：预设没有变动就干脆不写。
+       v2.4：但要把版本号补上 —— 不然「内容已经是新版、只是版本号没记」的情况
+       会一直被当成「有新版」反复提醒（点了更新也永远消不掉）。 */
     if(!(REMOTE.want.preset && REMOTE.preset)){ doScript(); return; }
-    if(REMOTE.pNoChg){ msgs.push("·  预设没有变动，已跳过（你现在的就是这版）"); doScript(); return; }
+    if(REMOTE.pNoChg){
+      var pv=(REMOTE.pv||"").trim();
+      if(pv && HOOK.stampVer){
+        HOOK.stampVer(pv, function(ok,msg){
+          msgs.push((ok?"✓ ":"✗ ")+(ok?("预设内容已经是 "+pv+"（"+msg+"）"):msg));
+          doScript();
+        });
+        return;
+      }
+      msgs.push("·  预设没有变动，已跳过（你现在的就是这版）"); doScript(); return;
+    }
     HOOK.apply(REMOTE.preset, function(ok,msg,items){
       if(items && items.length) NEWITEMS=items;   /* v2.0：拿写入的返回值，别再重读 */
       msgs.push((ok?"✓ ":"✗ ")+msg); doScript();
@@ -2768,8 +2910,12 @@ function copyText(t, done){
 function noticeFetch(cb){
   var b=(REMOTE.base||"").trim();
   if(!b || isLegacyPresetUrl(b)){ cb(null); return; }
+  /* ⚠ 必须用 fetchJson，不能用 fetchManifest：
+     fetchManifest 是给 update.json 写的，内部要求 JSON 里有 preset 或 script 键，
+     没有就判失败 —— 拿它拉 notice.json 会 100% 被拒，公告永远拉不到（v2.4 修）。 */
+  var f=HOOK.fetchJson || HOOK.fetchManifest;
   try{
-    HOOK.fetchManifest(joinUrl(b,"notice.json"), function(ok,j){
+    f(joinUrl(b,"notice.json"), function(ok,j){
       cb((ok && j && j.id) ? j : null);      /* 没有 id 就当没这回事，不做半成品渲染 */
     });
   }catch(e){ cb(null); }
@@ -2779,15 +2925,21 @@ function noticeInit(){
      他随时能在「关于」→ 作者公告 手动打开（那时候才连）。 */
   try{ if(!updAutoOn()) return; }catch(e){ return; }
   /* 比更新检查（启动 5 秒后）早一点，别跟它抢网络 */
-  setTimeout(function(){
+  var tries=0;
+  (function tick(){
+    if(tries>=3) return;                     /* 最多试 3 次，别一直骚扰 */
+    tries++;
     noticeFetch(function(n){
       if(!n) return;                                  /* 拉不到：闭嘴 */
       NOTICE.data=n;
-      if(mask.classList.contains("on")) return;       /* 有弹窗在，不抢 */
       if(noticeId()===String(n.id)) return;           /* 这一版已经看过了 */
+      if(mask.classList.contains("on")){              /* 有弹窗在（多半是更新窗）→ 不抢，等会儿再来 */
+        setTimeout(tick, 30000);
+        return;
+      }
       openNotice(n);
     });
-  },3000);
+  })();
 }
 function noticeOpenManual(){
   /* 「关于」里点进来的：缓存里有就直接开，没有就现拉一次 */
