@@ -424,6 +424,76 @@ html.night .sheet .hd button.sv{background:linear-gradient(180deg,#3a3a42,#26283
       <div class="plog" id="pubLog"></div>
     </section>
 
+    <!-- ══════════ 公告 ══════════ -->
+    <section class="pg" id="pg-notice">
+
+      <div class="card">
+        <div class="cap">公告内容</div>
+        <div class="lb">标题</div>
+        <input id="ntTitle" placeholder="作者公告">
+        <div class="lb">正文（一句话说清原委）</div>
+        <input id="ntBody" placeholder="由于作者没有模型，不好测试。">
+      </div>
+
+      <div class="card">
+        <div class="cap">群号 / 加群链接</div>
+        <div class="lb">群号上方那行小字</div>
+        <input id="ntQlb" placeholder="新建了测试群 · QQ">
+        <div class="lb">群号</div>
+        <input id="ntQnum" placeholder="458220931">
+        <div class="lb">加群链接（留空就不显示「加群」按钮）</div>
+        <input id="ntQurl" placeholder="https://qm.qq.com/q/…">
+        <div class="hint">QQ 群里点右上角 → 分享群 → 复制链接，粘进来就行</div>
+      </div>
+
+      <div class="card">
+        <div class="lb">要点（一行一条）</div>
+        <textarea id="ntPts" rows="6" placeholder="一行一条&#10;写 **文字** 会加粗"></textarea>
+        <div class="hint">例：过个两天应该会更新**测试预设**</div>
+      </div>
+
+      <label class="chk">
+        <input type="checkbox" id="ntRenotify" checked>
+        <span>
+          <span class="ct">改了就重新通知所有人</span>
+          <span class="cs">开着＝换新 id，所有人下次打开酒馆会再看到一次。只改错别字就关掉它再存，大家不会被重复打扰。</span>
+        </span>
+      </label>
+
+      <button class="primary" id="bNtSave">保存公告到仓库</button>
+      <button class="secondary" id="bNtPull">从仓库读取最新公告</button>
+      <div class="plog" id="ntLog"></div>
+    </section>
+
+    <!-- ══════════ 下载 ══════════ -->
+    <section class="pg" id="pg-dl">
+
+      <div class="card">
+        <div class="cap">只下载预设</div>
+        <div class="lb">选版本</div>
+        <select class="in" id="dlPv"><option>读取中…</option></select>
+        <button class="secondary" id="bDlP">下载预设（就只有预设）</button>
+        <div class="hint">文件名类似「斯德哥尔摩症v2.5.json」。不加脚本、不打包，拉下来是什么就存什么。</div>
+      </div>
+
+      <div class="card">
+        <div class="cap">只下载脚本</div>
+        <div class="lb">选版本</div>
+        <select class="in" id="dlSv"><option>读取中…</option></select>
+        <button class="secondary" id="bDlS">下载脚本（就只有脚本）</button>
+        <div class="hint">文件名类似「状态球v2.2.js」，存下来可以直接导入酒馆的脚本库。</div>
+      </div>
+
+      <div class="card flat">
+        <div class="cap">跟「下载整合件」有什么区别</div>
+        <div class="hint" style="font-size:12.5px;line-height:1.9">
+          整合件＝预设里塞好脚本，给新用户一次装齐用的。<br>
+          这两个按钮是分开的纯文件，方便你自己倒腾、或者单独发给别人。
+        </div>
+      </div>
+      <div class="plog" id="dlLog"></div>
+    </section>
+
     <!-- ══════════ 设置 ══════════ -->
     <section class="pg" id="pg-set">
 
@@ -473,6 +543,14 @@ html.night .sheet .hd button.sv{background:linear-gradient(180deg,#3a3a42,#26283
       <button data-pg="pub">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2"/></svg>
         发布
+      </button>
+      <button data-pg="notice">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5a1.5 1.5 0 001.5 1.5H8l6 4.5V3.5L8 8H5.5A1.5 1.5 0 004 9.5z"/><path d="M17.8 8.6a4.4 4.4 0 010 6.8"/></svg>
+        公告
+      </button>
+      <button data-pg="dl">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M4.5 19.5h15"/></svg>
+        下载
       </button>
       <button data-pg="set">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.4a1.5 1.5 0 00.3 1.7 2 2 0 11-2.8 2.8 1.5 1.5 0 00-2.6 1v.3a2 2 0 11-4 0v-.4a1.5 1.5 0 00-2.6-1 2 2 0 11-2.8-2.8 1.5 1.5 0 001-2.6H4.7a2 2 0 110-4h.3a1.5 1.5 0 001-2.6 2 2 0 112.8-2.8 1.5 1.5 0 002.6-1V4.7a2 2 0 114 0v.3a1.5 1.5 0 002.6 1 2 2 0 112.8 2.8 1.5 1.5 0 00-1 2.6h.4a2 2 0 110 4h-.4a1.5 1.5 0 00-1.5 1z"/></svg>
@@ -1134,6 +1212,131 @@ function doDownload(){
   toast("已生成："+name);
 }
 
+/* ========================= 公告（仓库里的 notice.json） =========================
+   公告不写死在脚本里：改这里保存后，所有人下次打开酒馆就能看到，不用发新版脚本。
+   判断「看没看过」靠 id：重新通知＝换 id，不重新通知＝沿用旧 id。 */
+var NT=null;                       /* 仓库里读到的公告对象 */
+function noticeFill(n){
+  NT=n;
+  $("ntTitle").value=n.title||"";
+  $("ntBody").value=n.body||"";
+  var q=n.qun||{};
+  $("ntQlb").value=q.label||"";
+  $("ntQnum").value=q.num||"";
+  $("ntQurl").value=q.url||"";
+  $("ntPts").value=(Array.isArray(n.points)?n.points:[]).join("\n");
+  logTo("ntLog","已读取：id="+(n.id||"?")+"　更新于 "+(n.updated||"?"));
+}
+async function noticePull(){
+  $("ntLog").innerHTML="";
+  if(!GH.owner||!GH.repo){ logTo("ntLog","先在「设置」里填仓库","er"); return null; }
+  logTo("ntLog","读取 notice.json …");
+  try{
+    var f=await ghGetFile("notice.json");
+    var j=JSON.parse(f.text);
+    noticeFill(j);
+    return j;
+  }catch(e){
+    if(e.status===404){
+      logTo("ntLog","仓库里还没有 notice.json —— 填完点保存就会创建","er");
+      NT=null; $("ntTitle").value="作者公告";
+    } else logTo("ntLog","× "+e.message,"er");
+    return null;
+  }
+}
+function noticeForm(){
+  var pts=$("ntPts").value.split("\n")
+    .map(function(s){ return s.replace(/\s+$/,""); })
+    .filter(function(s){ return s.length; });
+  return {
+    title:$("ntTitle").value.trim()||"作者公告",
+    body:$("ntBody").value.trim(),
+    qun:{ label:$("ntQlb").value.trim(), num:$("ntQnum").value.trim(),
+          url:$("ntQurl").value.trim(), joinText:"加群" },
+    points:pts,
+    updated:today()
+  };
+}
+function newNoticeId(){
+  return today().replace(/-/g,"")+"-"+Math.random().toString(36).slice(2,6);
+}
+async function noticeSave(){
+  var btn=$("bNtSave"); btn.disabled=true;
+  $("ntLog").innerHTML="";
+  try{
+    var j=noticeForm();
+    if(!j.body && !j.points.length && !j.qun.num){
+      logTo("ntLog","什么都没填，不保存","er"); btn.disabled=false; return;
+    }
+    var re=$("ntRenotify").checked, oldId=(NT&&NT.id)||"";
+    j.id = (re || !oldId) ? newNoticeId() : oldId;   /* 关掉开关＝沿用旧 id，不重弹 */
+    var sha=await ghCommit([{path:"notice.json", content:JSON.stringify(j,null,1)}],
+                           re?"更新作者公告":"修改作者公告文案（不重新通知）");
+    NT=j;
+    logTo("ntLog","✓ 已提交 "+String(sha).slice(0,7),"ok");
+    logTo("ntLog", re ? ("id 换成 "+j.id+" → 所有人下次打开酒馆会再看到一次")
+                      : ("id 没变（"+j.id+"）→ 看过的人不会被重复打扰"));
+    toast("公告已保存");
+  }catch(e){
+    logTo("ntLog","× "+e.message,"er");
+    toast("保存失败："+e.message);
+  }
+  btn.disabled=false;
+}
+
+/* ========================= 下载（预设 / 脚本分开，绝不打包） ========================= */
+var DLM=null;                      /* update.json，用来列版本 */
+async function dlFill(){
+  if(DLM) return DLM;
+  try{
+    var f=await ghGetFile("update.json");
+    DLM=JSON.parse(f.text);
+  }catch(e){ logTo("dlLog","× 读不到 update.json："+e.message,"er"); return null; }
+  var hist=Array.isArray(DLM.history)?DLM.history:[];
+  var pv=$("dlPv"), sv=$("dlSv");
+  pv.innerHTML=""; sv.innerHTML="";
+  var sp={}, ss={};
+  hist.forEach(function(h){
+    var p=h.preset, s=h.script, tag=(h===hist[0])?"（最新）":"";
+    if(p&&p.version&&p.file&&!sp[p.version]){
+      sp[p.version]=1;
+      pv.appendChild(new Option("预设 "+p.version+tag, JSON.stringify({v:p.version,f:p.file})));
+    }
+    if(s&&s.version&&s.file&&!ss[s.version]){
+      ss[s.version]=1;
+      sv.appendChild(new Option("脚本 "+s.version+tag, JSON.stringify({v:s.version,f:s.file})));
+    }
+  });
+  if(!pv.options.length) pv.appendChild(new Option("（没有可选版本）",""));
+  if(!sv.options.length) sv.appendChild(new Option("（没有可选版本）",""));
+  return DLM;
+}
+function saveBlob(text,name){
+  var blob=new Blob([text],{type:"application/octet-stream"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1200);
+}
+/* kind: "p" = 只下预设，"s" = 只下脚本 */
+async function dlOne(kind){
+  var sel=$(kind==="p"?"dlPv":"dlSv"), log=$("dlLog");
+  log.innerHTML="";
+  var val=sel.value;
+  if(!val){ toast("没有可选的版本"); return; }
+  var o=JSON.parse(val);
+  logTo("dlLog","拉取 "+o.f+" …");
+  try{
+    var f=await ghGetFile(o.f);
+    var name=(kind==="p") ? ("斯德哥尔摩症"+o.v+".json") : ("状态球"+o.v+".js");
+    saveBlob(f.text,name);
+    logTo("dlLog","✓ 已存下 "+name+"（"+Math.round(f.text.length/1024)+" KB）","ok");
+    logTo("dlLog",(kind==="p")?"就只有预设，没塞脚本":"就只有脚本，没打包预设");
+    toast("已下载："+name);
+    return name;
+  }catch(e){ logTo("dlLog","× "+e.message,"er"); return ""; }
+}
+
 /* ========================= 初始化 ========================= */
 function initTheme(){
   var n=null; try{ n=localStorage.getItem("sk_pub_night"); }catch(e){}
@@ -1145,6 +1348,8 @@ function initTheme(){
 }
 var PG_TITLE={ preset:["发布台",""],
                pub:["发布","推到仓库，机器人随后自动打包"],
+               notice:["公告","改完保存，所有人下次打开酒馆就看到"],
+               dl:["下载","预设和脚本分开下，都不打包"],
                set:["设置","Token 只存在这台手机的浏览器里"] };
 function bindTabs(){
   document.querySelectorAll(".tabs button").forEach(function(b){
@@ -1155,6 +1360,8 @@ function bindTabs(){
       document.querySelectorAll(".pg").forEach(function(s){ s.classList.remove("on"); });
       $("pg-"+id).classList.add("on");
       if(id==="pub") refreshPub();
+      if(id==="notice") noticePull();
+      if(id==="dl") dlFill();
       var t=PG_TITLE[id], h=$("hTitle");
       if(t&&h) h.textContent=t[0];
       if(id==="preset") setHead();
@@ -1180,6 +1387,10 @@ function bindBtns(){
   $("sch").oninput=function(){ renderList(); };
   $("bPub").onclick=doPublish;
   $("bDl").onclick=doDownload;
+  $("bNtSave").onclick=noticeSave;
+  $("bNtPull").onclick=function(){ noticePull(); };
+  $("bDlP").onclick=function(){ dlOne("p"); };
+  $("bDlS").onclick=function(){ dlOne("s"); };
   $("sheet").onclick=function(e){ if(e.target===$("sheet")) sheetClose(); };
   /* 设置页 */
   $("tkEye").onclick=function(){
@@ -1216,6 +1427,9 @@ window.__PTS={
   addToOrder:addToOrder, delFromOrder:delFromOrder,
   autoVer:autoVer, myScriptVer:myScriptVer,
   pullRemote:pullRemote, publish:doPublish, download:doDownload,
+  noticePull:noticePull, noticeSave:noticeSave, noticeForm:noticeForm,
+  notice:function(){ return NT; },
+  dlFill:dlFill, dlOne:dlOne,
   gh:function(){ return GH; }, setGh:function(o){ for(var k in o) GH[k]=o[k]; ghSave(); },
   sheetClose:sheetClose
 };
