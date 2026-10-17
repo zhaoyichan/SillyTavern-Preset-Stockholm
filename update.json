@@ -84,7 +84,7 @@
    },
    "script": {
     "version": "v2.2",
-    "file": "script/orb.js"
+    "file": "archive/orb-v2.2.js"
    },
    "changelog": [
     "精简了一下条目，主次更加突出了",
@@ -106,7 +106,7 @@
    },
    "script": {
     "version": "v2.2",
-    "file": "script/orb.js"
+    "file": "archive/orb-v2.2.js"
    },
    "changelog": [
     "修改了正则美化 / 同人简、详、导演条目添加了原作剧情推进",
@@ -126,7 +126,7 @@
    },
    "script": {
     "version": "v2.2",
-    "file": "script/orb.js"
+    "file": "archive/orb-v2.2.js"
    },
    "changelog": [
     "工具页换新版式（浅色精致风）",
