@@ -977,15 +977,58 @@ function openGroups(){
 }
 
 /* ---------- 载入预设 ---------- */
+/* 酒馆导出预设时会把 Main Prompt / Agent xxx 这类「系统字段」也塞进 prompts 数组，
+   还常常塞两份（固定 id 一份 + UUID id 一份）→ 别人导入后列表里就出现重复的 Main Prompt。
+   载入时就剔掉，prompts 与 prompt_order 一起剔，两边保持一致。 */
+var SYS_IDS={main:1,jailbreak:1,enhanceDefinitions:1,nsfl:1,
+  agentSystemPrompt:1,agentResults:1,agentTask:1};
+var SYS_NAMES={"Main Prompt":1,"Post-History Instructions":1,"Enhance Definitions":1,
+  "Jailbreak Prompt":1,"NSFW Prompt":1,"Agent System Prompt":1,
+  "Agent Results":1,"Agent Task":1};
+var SYS_SNIPS=["Write {{char}}'s next reply in a fictional chat",
+  "If you have more knowledge of {{char}}"];
+function isSysPrompt(x){
+  if(!x||typeof x!=="object") return false;
+  var idd=String(x.identifier||"").trim(), nm=String(x.name||"").trim();
+  if(SYS_IDS[idd]) return true;                    /* 固定 id：必删 */
+  if(SYS_NAMES[nm]){                               /* 名字撞车：内容还是酒馆默认文案（或空）才删，
+                                                      用户自己写的同名词条留着 */
+    var ct=String(x.content||"").trim();
+    if(!ct) return true;
+    for(var i=0;i<SYS_SNIPS.length;i++) if(ct.indexOf(SYS_SNIPS[i])>=0) return true;
+  }
+  return false;
+}
+function stripSys(j){
+  if(!j||!Array.isArray(j.prompts)) return {n:0,names:[]};
+  var drop={},names=[],keep=[];
+  j.prompts.forEach(function(x){
+    if(isSysPrompt(x)){
+      var idd=String(x.identifier||"").trim();
+      if(idd) drop[idd]=1;
+      names.push(x.name||idd);
+    } else keep.push(x);
+  });
+  if(!names.length) return {n:0,names:[]};
+  j.prompts=keep;
+  if(Array.isArray(j.prompt_order)) j.prompt_order.forEach(function(blk){
+    if(blk&&Array.isArray(blk.order)) blk.order=blk.order.filter(function(o){
+      return !(o&&typeof o==="object"&&drop[String(o.identifier||"").trim()]);
+    });
+  });
+  return {n:names.length,names:names};
+}
 function loadPreset(j,fname){
   if(!j||!Array.isArray(j.prompts)){ toast("这不是预设 JSON（没有 prompts 数组）"); return; }
+  var _s=stripSys(j);
   P=j; PROMPTS=P.prompts;
   if(!P.name) P.name=(fname?fname.replace(/\.json$/i,""):"未命名预设");
   FNAME=fname||P.name||"";
   ensureGroups();
   REMOTE=null;
   renderList(); refreshPub();
-  toast("已载入："+P.name+"（"+PROMPTS.length+" 条）");
+  toast("已载入："+P.name+"（"+PROMPTS.length+" 条）"
+    +(_s.n?"，剔掉 "+_s.n+" 条酒馆系统条目":""));
 }
 function loadFromText(t,fname){
   var j;
@@ -1121,6 +1164,11 @@ async function doPublish(){
   var btn=$("bPub"); btn.disabled=true; $("pubLog").innerHTML="";
   try{
     logTo("pubLog","=== 开始发布 ===");
+    /* 保险：万一载入后又被改回来，发布前再剔一次（prompts + prompt_order 同步） */
+    var _s2=stripSys(P);
+    if(_s2.n){ PROMPTS=P.prompts;
+      logTo("pubLog","剔掉 "+_s2.n+" 条酒馆系统条目："+_s2.names.slice(0,6).join("、"));
+      renderList(); }
     logTo("pubLog","拉取仓库当前状态…");
     REMOTE=null;
     var R=await pullRemote(true);
