@@ -1250,6 +1250,13 @@ async function doPublish(){
       script:{version:sv, file:"script/orb.js"},
       changelog:plog.concat(slog),
       release:"https://github.com/"+GH.owner+"/"+GH.repo+"/releases/tag/"+tag }].concat(hist);
+    /* 公告内嵌进索引：脚本启动本来就要拉 update.json，顺手就能拿到公告，
+       不用再多发一个 notice.json 的请求（v2.7）。没有公告文件也不影响发布。 */
+    try{
+      var nf=await ghGetFile("notice.json");
+      var nj=JSON.parse(nf.text);
+      if(nj&&nj.id){ up.notice=nj; logTo("pubLog","索引内嵌公告 id="+nj.id); }
+    }catch(e){ logTo("pubLog","（公告没内嵌进索引："+e.message+"）"); }
     files.push({path:"update.json", content:JSON.stringify(up,null,1)});
 
     /* 提交 */
@@ -1339,8 +1346,17 @@ async function noticeSave(){
     }
     var re=$("ntRenotify").checked, oldId=(NT&&NT.id)||"";
     j.id = (re || !oldId) ? newNoticeId() : oldId;   /* 关掉开关＝沿用旧 id，不重弹 */
-    var sha=await ghCommit([{path:"notice.json", content:JSON.stringify(j,null,1)}],
-                           re?"更新作者公告":"修改作者公告文案（不重新通知）");
+    /* 公告同时写进 update.json：脚本启动本来就要拉索引，顺手就能拿到公告，
+       不用再多发一个 notice.json 的请求（v2.7）。索引读不到也不影响公告保存。 */
+    var nf=[{path:"notice.json", content:JSON.stringify(j,null,1)}];
+    try{
+      var uf=await ghGetFile("update.json");
+      var up=JSON.parse(uf.text);
+      up.notice=j;
+      nf.push({path:"update.json", content:JSON.stringify(up,null,1)});
+      logTo("ntLog","已同步进 update.json（脚本拿索引就能弹公告，不用单拉文件）");
+    }catch(e){ logTo("ntLog","（update.json 没同步："+e.message+"）"); }
+    var sha=await ghCommit(nf, re?"更新作者公告":"修改作者公告文案（不重新通知）");
     NT=j;
     logTo("ntLog","✓ 已提交 "+String(sha).slice(0,7),"ok");
     logTo("ntLog", re ? ("id 换成 "+j.id+" → 所有人下次打开酒馆会再看到一次")

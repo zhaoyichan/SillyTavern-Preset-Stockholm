@@ -2007,7 +2007,7 @@ function claimHtml(){
      "preset": {"version":"v1.9","file":"preset/斯德哥尔摩症_v1.9.json","changelog":["…"]},
      "script": {"version":"v1.0","file":"script/斯德哥尔摩·状态球.js","changelog":["…"]}
    }                                                                        */
-var ORB_VER="v2.6";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
+var ORB_VER="v2.7";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
 var REMOTE = {
   base:"https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
   mf:null,          /* 索引 */
@@ -2597,17 +2597,31 @@ function updAutoInit(){
     setTimeout(updAutoTick, 5000);      /* 别跟启动抢网络 */
   }catch(e){}
 }
-function updAutoTick(){
+function updAutoTick(force){
   try{
     if(!updAutoOn()) return;
-    if(mask && mask.classList.contains("on")){                      /* 有弹窗在，不凑热闹 */
-      if(!updAutoTick.__re){ updAutoTick.__re=1; setTimeout(updAutoTick, 25000); }
+    /* v2.7：以前是「有弹窗在就退避 25 秒，只让一次」，结果公告一弹窗挂着不点，
+       更新检查就永远不跑了。现在改成盯着弹窗：它一关就接着检查；
+       万一真挂了 10 分钟没人管，就强行检查（更新比公告重要）。 */
+    if(!force && mask && mask.classList.contains("on")){
+      if(updAutoTick.__w) return;
+      updAutoTick.__w=1;
+      var t0=Date.now();
+      var iv=setInterval(function(){
+        if(mask && mask.classList.contains("on")){
+          if(Date.now()-t0<600000) return;                 /* 还在等，继续等 */
+          clearInterval(iv); updAutoTick.__w=0; updAutoTick(true);   /* 挂太久：强行检查 */
+          return;
+        }
+        clearInterval(iv); updAutoTick.__w=0; updAutoTick();         /* 弹窗关了：接着检查 */
+      },1000);
       return;
     }
     var pn=Q("panel");
     if(pn && pn.classList.contains("open")){ setTimeout(updAutoTick, 30000); return; }  /* 面板开着，等会儿 */
     HOOK.fetchManifest(joinUrl(REMOTE.base,"update.json"), function(ok, mf){
       if(!ok || !mf) return;                                        /* 拉不到就当没事，绝不弹错 */
+      REMOTE.mf=mf; noticeFromManifest();   /* v2.7：索引里内嵌的公告，顺手对一下 id */
       var sv=(mf.script&&mf.script.version)||"", pv=(mf.preset&&mf.preset.version)||"";
       var lv=presetVer();                    /* 本地预设版本（从预设名末尾解析） */
       /* v1.7：真比大小。相等、或者本地比仓库还新 → 一律不弹（以前只要字符串不等就弹） */
@@ -3035,7 +3049,16 @@ Q("btnAbout").onclick=function(){openAbout();};
      才记下 id 不再打扰。点红色「知道了」或点空白处＝只关这一次，下次开还会弹
      （太多人更新完手快一划就过去了，压根没看）。
      作者改了内容发布台会换一个新 id → 记录的 id 对不上，所有人又会重新看到。 */
-var NOTICE={data:null};
+var NOTICE={data:null,shownId:null,waiting:false,from:"remote"};
+/* 内置兜底公告：构建时从 notice.json 烤进脚本（见 build_orb.py 的 __NOTICE_BUILTIN__）。
+   远程一条都拿不到时弹它 —— v2.7 起「拉不到就闭嘴」改成了「拉不到还有内置的」。
+   原型里这一恒为 null，只有构建产物才有内容。 */
+var NOTICE_BUILTIN={"id": "20261019a", "title": "作者公告", "body": "由于作者没有模型，不好测试。", "qun": {"label": "新建了测试群 · QQ", "num": "458220931", "url": "https://qm.qq.com/q/u8ik4W3MJi", "joinText": "加群"}, "points": ["过个两天应该会更新**测试预设**", "到时候会艾特全体，确认可以之后会发帖", "此外，也欢迎在这个群里反馈、提出你关于预设的意见", "在群里单纯吹水、聊天、聊骚、问问题也没问题，欢迎欢迎"], "updated": "2026-10-19"};
+/* 本地缓存：拿到过一次远程公告就存起来，下次开酒馆直接弹它，一个请求都不发。
+   作者换了公告 id（发布台里改的）→ 索引 update.json 里的 id 对不上 → 才重新拉一次。 */
+function noticeCacheGet(){ try{ return JSON.parse(localStorage.getItem("sk_orb_notice_cache")||"null"); }catch(e){ return null; } }
+function noticeCacheSet(n){ try{ localStorage.setItem("sk_orb_notice_cache", JSON.stringify(n)); }catch(e){} }
+function noticeOk(n){ return !!(n && n.id); }
 /* 只记「明确说不想再看」的人。老 key（sk_orb_notice_id）是「看过就算」的旧语义，
    一律作废 → 以前看过的人这次也会重新弹一遍。 */
 function noticeMuted(id){
@@ -3078,33 +3101,88 @@ function noticeFetch(cb){
     });
   }catch(e){ cb(null); }
 }
+/* 拿到一份公告：存起来 + 该弹就弹。cache=false 的（内置那份）不写缓存，
+   免得把兜底内容顶掉以后再也拉不到远程的。 */
+function noticeTake(n,cache,from){
+  if(!noticeOk(n)) return false;
+  NOTICE.data=n; NOTICE.from=from||"remote";
+  if(cache!==false) noticeCacheSet(n);
+  noticeWant(n);
+  return true;
+}
+/* 弹不弹：点过「不再显示」的人不弹；同一个 id 不重复弹。
+   ⚠ 去重必须按 id，不能按「弹过就完了」：否则先弹了缓存里的旧公告，
+      作者换 id 后的新公告就被挡住永远出不来（v2.7 修）。 */
+function noticeWant(n){
+  if(NOTICE.shownId===n.id) return;
+  try{ if(noticeMuted(n.id)) return; }catch(e){}
+  if(mask && mask.classList.contains("on")){ noticeWait(n); return; }   /* 有弹窗占着 → 排队等 */
+  NOTICE.shownId=n.id; openNotice(n);
+}
+/* v2.7：以前被弹窗挡住是「退避 30 秒 ×3，然后彻底放弃」，更新窗挂着不点就再也看不到公告。
+   现在改成盯着弹窗，它一关就弹（最多等 10 分钟）。 */
+function noticeWait(n){
+  if(NOTICE.waiting) return;
+  NOTICE.waiting=true;
+  var t0=Date.now();
+  var iv=setInterval(function(){
+    if(mask && mask.classList.contains("on")){
+      if(Date.now()-t0>600000){ clearInterval(iv); NOTICE.waiting=false; }
+      return;
+    }
+    clearInterval(iv); NOTICE.waiting=false; noticeWant(n);
+  },1000);
+}
+/* 远程一条都没有 → 用脚本内置那份兜底 */
+function noticeFallback(){
+  if(NOTICE.shownId) return;
+  if(noticeOk(NOTICE_BUILTIN)) noticeTake(NOTICE_BUILTIN,false,"builtin");
+}
 function noticeInit(){
-  /* 关掉「启动自动检查」的人＝不想让脚本自己联网，公告也别去拉。
-     他随时能在「关于」→ 作者公告 手动打开（那时候才连）。 */
-  try{ if(!updAutoOn()) return; }catch(e){ return; }
-  /* 比更新检查（启动 5 秒后）早一点，别跟它抢网络 */
-  var tries=0;
-  (function tick(){
-    if(tries>=3) return;                     /* 最多试 3 次，别一直骚扰 */
-    tries++;
-    noticeFetch(function(n){
-      if(!n) return;                                  /* 拉不到：闭嘴 */
-      NOTICE.data=n;
-      if(noticeMuted(n.id)) return;                   /* 只有点过「不再显示」的人才会被跳过 */
-      if(mask.classList.contains("on")){              /* 有弹窗在（多半是更新窗）→ 不抢，等会儿再来 */
-        setTimeout(tick, 30000);
-        return;
-      }
-      openNotice(n);
-    });
-  })();
+  /* ① 本地缓存里有 → 直接弹，一个请求都不发
+     ② 没缓存 → 拉 notice.json，失败重试 3 次（0 / 4 / 10 秒）
+     ③ 还是没有 → 弹脚本内置的兜底公告
+     v2.7 以前是「拉不到就闭嘴」，手机网络抖一下这次打开就没公告了。 */
+  NOTICE.shownId=null;      /* 新的一次启动：允许弹（同一次启动内同一个 id 只弹一次） */
+  try{
+    var c=noticeCacheGet();
+    if(noticeOk(c) && noticeTake(c)) return;
+    if(!updAutoOn()){ noticeFallback(); return; }   /* 关掉启动自动检查＝不想让脚本联网 */
+  }catch(e){}
+  noticeTry(0);
+}
+function noticeTry(i){
+  noticeFetch(function(n){
+    if(noticeOk(n) && noticeTake(n)) return;
+    /* 第一次就没拉到：别让用户干等着，先把内置的弹出来。
+       后面远程补到时 id 一样 → 只更新缓存，不会再弹一遍；
+       id 不一样说明作者换了公告 → 那才值得再弹一次。 */
+    if(i===0) noticeFallback();
+    if(i>=2){ noticeFallback(); return; }   /* 试满了：确保兜底那份已经弹出来 */
+    setTimeout(function(){ noticeTry(i+1); }, [0,1500,5000][i]);
+  });
+}
+/* update.json 里也内嵌了一份公告（发布时同步进去的）。拿到索引时顺手对一下 id：
+   跟手里这份不一样 ＝ 作者改了公告 → 重新拉一份并弹出来。 */
+function noticeFromManifest(){
+  try{
+    var m=(REMOTE.mf&&REMOTE.mf.notice)?REMOTE.mf.notice:null;
+    if(!noticeOk(m)) return;
+    var have=NOTICE.data;
+    if(have && have.id===m.id) return;                 /* 一样，不用动 */
+    if(m && (!have || have.id!==m.id)){
+      if(!updAutoOn()){ noticeTake(m); return; }
+      noticeFetch(function(n){ if(noticeOk(n)) noticeTake(n); else noticeTake(m); });
+    }
+  }catch(e){}
 }
 function noticeOpenManual(){
-  /* 「关于」里点进来的：缓存里有就直接开，没有就现拉一次 */
-  if(NOTICE.data){ openNotice(NOTICE.data); return; }
+  /* 「关于」里点进来的：手上有就直接开，没有就现拉一次，再没有就内置的 */
+  if(noticeOk(NOTICE.data)){ NOTICE.shownId=null; openNotice(NOTICE.data); return; }
   noticeFetch(function(n){
-    if(!n){ toast("没拿到公告：检查仓库地址或网络"); return; }
-    NOTICE.data=n; openNotice(n);
+    if(noticeOk(n)){ NOTICE.shownId=null; openNotice(n); return; }
+    if(noticeOk(NOTICE_BUILTIN)){ NOTICE.shownId=null; openNotice(NOTICE_BUILTIN); return; }
+    toast("没拿到公告：检查仓库地址或网络");
   });
 }
 /* 要点里的 **文字** 会加粗（先 esc 再转，不会放出 HTML） */
@@ -3130,7 +3208,9 @@ function openNotice(n){
   h+='<div class="bt"><button class="go" id="ntOk">知道了</button></div>'
     +'<div class="nt-mute" id="ntMute">我已知晓，不再显示</div>'
     +'<p style="font-size:10.5px;color:var(--ink3);margin:10px 0 0;line-height:1.6">'
-    +'这条公告每次打开酒馆都会再弹一次；不想再看到，就点上面那行小字。</p>';
+    +'这条公告每次打开酒馆都会再弹一次；不想再看到，就点上面那行小字。'
+    +(NOTICE.from==="builtin"?'<br>本次没能连上仓库，显示的是脚本内置的那份公告，可能不是最新的。':'')
+    +'</p>';
   dlg.innerHTML=h;
   /* 红色「知道了」＝只关这一次，下次开还弹（防止手快的人一划就过） */
   Q("ntOk").onclick=function(){ mask.classList.remove("on"); };
