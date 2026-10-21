@@ -2,11 +2,23 @@
  "_说明": "悬浮球在线更新的索引文件。file 相对仓库根；也可以填完整 http(s) 地址。少写哪条通道，悬浮球里那条就会灰掉。history＝全部历史版本（最新的在最上面），老版本的脚本归档在 archive/ 下，可以直接选它更新（回退）。",
  "_readme_base": "https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
  "preset": {
-  "version": "v2.6",
-  "file": "preset/preset-v2.6.json",
+  "version": "v2.7",
+  "file": "preset/preset-v2.7.json",
   "changelog": [
-   "清掉酒馆混进来的系统字段垃圾条目（Main Prompt / Post-History Instructions / Enhance Definitions / Agent 三条，共 9 条），现在是干净的 60 条；老用户点更新时这 9 条会自动移除，不用重装",
-   "删除 9 条：Agent System Prompt、Agent Results、Post-History Instructions、Agent Task、Enhance Definitions、Main Prompt、Main Prompt、Post-History Instructions、Enhance Definitions"
+   "小更新",
+   "添加了神人弹幕，特制的，非常神人，效果非常雷迪，推荐开启",
+   "有时候推荐看思维链，导演的嘲讽也是不得不品的一部分",
+   "添加了攻略难度，然后上限友情，爱情更难得到。",
+   "角色锚添加了主角对角色的影响，如他把你当成一个女人，结果发现你是个男人，那他以后恋爱相处都会有阴影。不是每轮变化，是长期或者极端事情才有。",
+   "有暴力倾向不积累怒气条是直接反应。",
+   "用户的输入 Npc没有义务做出回应",
+   "添加了伤会缓慢自动恢复",
+   "镜头可以不朝着主角",
+   "添加了npc的自主性，npc之间的对话不会落空",
+   "添加了黑暗森林条目可以自行开启，巴别塔内置",
+   "导演反应默认鄙视，输入异想天开指令他会嘲笑",
+   "在真实性世界上有所打磨和加强",
+   "这一版觉得不错，发上来纪念留档"
   ]
  },
  "script": {
@@ -18,9 +30,40 @@
  },
  "history": [
   {
+   "tag": "v2.7-orb2.7",
+   "date": "2026-10-21",
+   "latest": true,
+   "preset": {
+    "version": "v2.7",
+    "file": "preset/preset-v2.7.json"
+   },
+   "script": {
+    "version": "v2.7",
+    "file": "script/orb.js"
+   },
+   "changelog": [
+    "小更新",
+    "添加了神人弹幕，特制的，非常神人，效果非常雷迪，推荐开启",
+    "有时候推荐看思维链，导演的嘲讽也是不得不品的一部分",
+    "添加了攻略难度，然后上限友情，爱情更难得到。",
+    "角色锚添加了主角对角色的影响，如他把你当成一个女人，结果发现你是个男人，那他以后恋爱相处都会有阴影。不是每轮变化，是长期或者极端事情才有。",
+    "有暴力倾向不积累怒气条是直接反应。",
+    "用户的输入 Npc没有义务做出回应",
+    "添加了伤会缓慢自动恢复",
+    "镜头可以不朝着主角",
+    "添加了npc的自主性，npc之间的对话不会落空",
+    "添加了黑暗森林条目可以自行开启，巴别塔内置",
+    "导演反应默认鄙视，输入异想天开指令他会嘲笑",
+    "在真实性世界上有所打磨和加强",
+    "这一版觉得不错，发上来纪念留档",
+    "公告改成「每次打开一定有得弹」：拉不到仓库就用脚本内置那份兜底（不再是拉不到就闭嘴）；公告被更新弹窗挡住时改成排队等它关，不再直接放弃；公告换了新 id，所有人会重新看到一次"
+   ],
+   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v2.7-orb2.7"
+  },
+  {
    "tag": "v2.6-orb2.7",
    "date": "2026-10-19",
-   "latest": true,
+   "latest": false,
    "preset": {
     "version": "v2.6",
     "file": "preset/preset-v2.6.json"
