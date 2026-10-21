@@ -405,6 +405,7 @@ html.night .sheet .hd button.sv{background:linear-gradient(180deg,#3a3a42,#26283
         <div class="lb">版本号</div>
         <input id="pvIn" placeholder="自动">
         <div class="hint" id="pvHint">载入预设后会自动判断（内容改了但版本号没升，发布时自动 +1）</div>
+        <div id="verBox"></div>
       </div>
 
       <div class="card">
@@ -1077,15 +1078,43 @@ function diffPrompts(oldA,newA){
     if(p.name&&byName[p.name]!==undefined) return byName[p.name];
     return -1;
   }
-  var added=[], modified=[], used={};
+  var added=[], modified=[], toggled=[], used={};
   N.forEach(function(p){
     var i=find(p);
     if(i<0){ added.push(p); return; }
     used[i]=1;
     if(!sameItem(O[i],p)) modified.push(p);
+    /* ★2026-10-21：SAME_KEYS 里故意不比 enabled（怕误判），
+       所以「只改了开关」以前会被当成「没改动」→ 版本号不升 → 原地覆盖，
+       别人收不到更新、看到的还是旧版本。开关必须单独算一类改动。 */
+    else if(!!O[i].enabled !== !!p.enabled) toggled.push(p);
   });
   var removed=O.filter(function(p,i){ return !used[i]; });
-  return {added:added, removed:removed, modified:modified};
+  return {added:added, removed:removed, modified:modified, toggled:toggled};
+}
+/* 条目顺序（prompt_order）变了也算改动 —— 只挪位置也是新版本 */
+function orderOf(p){
+  try{
+    var o=p.prompt_order&&p.prompt_order[0]&&p.prompt_order[0].order;
+    return Array.isArray(o)?o:null;
+  }catch(e){ return null; }
+}
+function orderChanged(oldP,newP){
+  var a=orderOf(oldP)||[], b=orderOf(newP)||[];
+  if(!a.length||!b.length) return false;
+  if(a.length!==b.length) return true;
+  for(var i=0;i<a.length;i++){
+    var x=typeof a[i]==="object"?JSON.stringify(a[i]):a[i];
+    var y=typeof b[i]==="object"?JSON.stringify(b[i]):b[i];
+    if(x!==y) return true;
+  }
+  return false;
+}
+/* 「算不算有改动」的唯一入口：新增 / 删除 / 改文 / 开关 / 顺序，五样都算 */
+function hasChange(d,oldP,newP){
+  if(!d) return false;
+  return !!(d.added.length||d.removed.length||d.modified.length||d.toggled.length
+            ||orderChanged(oldP,newP));
 }
 function namesOf(lst){
   var n=lst.map(function(p){ return p.name||p.identifier||"(无名)"; });
@@ -1096,6 +1125,7 @@ function diffHtml(d){
   if(d.added.length)    h+='<div><span class="k">新增</span><span class="v up">'+d.added.length+'：'+esc(namesOf(d.added))+'</span></div>';
   if(d.removed.length)  h+='<div><span class="k">删除</span><span class="v rm">'+d.removed.length+'：'+esc(namesOf(d.removed))+'</span></div>';
   if(d.modified.length) h+='<div><span class="k">改文</span><span class="v">'+d.modified.length+'：'+esc(namesOf(d.modified))+'</span></div>';
+  if(d.toggled&&d.toggled.length) h+='<div><span class="k">开关</span><span class="v">'+d.toggled.length+'：'+esc(namesOf(d.toggled))+'</span></div>';
   if(!h) h='<div class="v">和仓库线上版相比：<b>内容没有变化</b></div>';
   return h;
 }
@@ -1113,6 +1143,21 @@ async function pullRemote(force){
   REMOTE={ man:man, oldP:oldP, orbText:orb?orb.text:"", updateText:upF.text };
   return REMOTE;
 }
+/* 内置脚本外壳兜底：字段和酒馆导出的一模一样，
+   主预设存纯的之后，仓库和你上传的文件里都可能没有脚本，用它兜底必定能发布。 */
+function DEF_SHELL(){
+  return {
+    name:"斯德哥尔摩\u00b7状态球",
+    id:"ca987efe-2f9d-45d8-a464-0b3bedc22836",
+    type:"script",
+    content:"",
+    enabled:true,
+    button:{buttons:[],enabled:false},
+    data:{},
+    export_with:{button:true,data:true},
+    info:"作者 Liwe（李伟）。读最新楼层 <state>/<anchor> 显示当前状态；列表式管理预设全部条目（开关/编辑/排序/新增）；支持从 GitHub 拉新版预设。不注入正文、不存长期记忆。"
+  };
+}
 function myScriptVer(){
   if(!P) return "";
   var sc=P.extensions&&P.extensions.tavern_helper
@@ -1127,9 +1172,75 @@ function autoVer(){
   if(!REMOTE) return cur;
   var old=REMOTE.man.preset.version||"";
   var d=diffPrompts(REMOTE.oldP.prompts||[],PROMPTS);
-  var changed=!!(d.added.length||d.removed.length||d.modified.length);
+  var changed=hasChange(d,REMOTE.oldP,P);
   if(cur&&cur===old&&changed) return vbump(old);
   return cur||old;
+}
+/* 版本号比大小：返回 -1/0/1（不能只比相等，2.10 要比 2.9 新） */
+function vcmp(a,b){
+  var pa=String(a||"").replace(/^v/i,"").split(".");
+  var pb=String(b||"").replace(/^v/i,"").split(".");
+  for(var i=0;i<Math.max(pa.length,pb.length);i++){
+    var x=parseInt(pa[i],10), y=parseInt(pb[i],10);
+    x=isNaN(x)?0:x; y=isNaN(y)?0:y;
+    if(x!==y) return x<y?-1:1;
+  }
+  return 0;
+}
+/* ★版本号体检（2026-10-21 用户定死）：发布前必须过这一关。
+   把「文件里写的版本 / 线上版本 / 这次发成什么」摆一起对一遍：
+     对不上 → 弹出来要人确认（并自动把预设名改成新版号）
+     要发旧版 → 直接拦下，绝不许把索引指回旧版 */
+function verCheck(R){
+  var old=(R&&R.man&&R.man.preset&&R.man.preset.version)||"";
+  var cur=(P&&vparse(P.name))||"";
+  var manual=($("pvIn").value||"").trim();
+  var d=diffPrompts((R&&R.oldP&&R.oldP.prompts)||[],PROMPTS||[]);
+  var changed=hasChange(d,R&&R.oldP,P);
+  var pv=manual ? (vparse(manual)||("v"+manual.replace(/^v/i,"")))
+                : ((cur&&cur===old&&changed)?vbump(old):(cur||old));
+  var r={pv:pv,cur:cur,old:old,changed:changed,level:"ok",title:"",msg:""};
+  if(!pv||!/^v\d/.test(pv)){
+    r.level="block"; r.title="读不出版本号";
+    r.msg="预设名和版本号框里都没写着 vX.Y 这样的版本号，没法判断该发成哪一版。";
+    return r;
+  }
+  if(old&&vcmp(pv,old)<0){
+    r.level="block"; r.title="版本号比线上还旧，已拦下";
+    r.msg="这份要发成 "+pv+"，可仓库线上已经是 "+old+"。\n发出去会把索引指回旧版，大家都收到「降级更新」。\n请改成 "+vbump(old)+" 或更高再发。";
+    return r;
+  }
+  var msgs=[];
+  if(cur&&cur!==pv)
+    msgs.push("你文件里的预设名写着 "+cur+"，这次会发布成 "+pv+"（发布时自动把预设名改成「斯德哥尔摩症"+pv+"」）。");
+  if(!cur)
+    msgs.push("你文件里的预设名读不出版本号，发布时会写成「斯德哥尔摩症"+pv+"」。");
+  if(pv===old&&changed)
+    msgs.push("内容有改动，但版本号还是 "+old+" → 别人【不会】收到更新提示（悬浮球比的是版本号大小）。建议发成 "+vbump(old)+"。");
+  if(pv===old&&!changed)
+    msgs.push("版本号和内容都跟线上一样 → 只是原地覆盖，别人【不会】收到更新提示。");
+  if(msgs.length){
+    r.level="ask";
+    r.title=(cur&&cur!==pv)?("版本号要改："+cur+" → "+pv):("发布成 "+pv+"，请确认");
+    r.msg=msgs.join("\n");
+  }
+  return r;
+}
+function verBoxHtml(vc){
+  var col=vc.level==="block"?"#b4232a":(vc.level==="ask"?"#9a7b4c":"#2f7a4f");
+  var row=function(k,v,c){
+    return '<div style="display:flex;justify-content:space-between;gap:10px">'
+      +'<span style="color:#8a8275">'+k+'</span><b style="color:'+(c||"#3a352c")+'">'+v+'</b></div>';
+  };
+  var h='<div style="margin-top:9px;padding:10px 12px;border-radius:9px;background:#faf8f4;'
+    +'border:1px solid #eee9df;font-size:12.5px;line-height:1.75;color:#3a352c">'
+    +row("文件里写着",vc.cur||"（读不到）")
+    +row("仓库线上",vc.old||"—")
+    +row("这次发布为",vc.pv,col);
+  if(vc.msg) h+='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #e5dfd2;color:'+col+'">'
+    +esc(vc.msg).replace(/\n/g,"<br>")+'</div>';
+  else h+='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #e5dfd2;color:#2f7a4f">三个版本号对得上，可以直接发</div>';
+  return h+'</div>';
 }
 async function refreshPub(){
   $("pubRepo").textContent=GH.owner+"/"+GH.repo+" @"+(GH.branch||"main");
@@ -1148,9 +1259,10 @@ async function refreshPub(){
     if(!pv.value) pv.setAttribute("placeholder", autoVer());
     var hint=$("pvHint");
     var auto=autoVer(), cur=vparse(P.name)||"";
-    if(cur&&cur===R.man.preset.version&&(d.added.length||d.removed.length||d.modified.length))
+    if(cur&&cur===R.man.preset.version&&hasChange(d,R.oldP,P))
       hint.textContent="内容有改动但版本号和线上一样 → 发布时会自动升到 "+auto;
     else hint.textContent="留空就用 "+auto+"；想自己定就直接填";
+    if($("verBox")) $("verBox").innerHTML=verBoxHtml(verCheck(R));
   }catch(e){
     $("pubRemote").textContent="查询失败："+e.message;
     $("diffBox").textContent="（拉不到仓库当前版，发布时会再试一次）";
@@ -1175,17 +1287,22 @@ async function doPublish(){
     var oldVer=R.man.preset.version||"";
     var oldSv=(R.man.script&&R.man.script.version)||"";
 
-    /* 版本号 */
-    var curVer=vparse(P.name)||"";
+    /* 版本号：先体检，过了才发（对不上要人确认，发旧版直接拦下） */
     var d=diffPrompts(R.oldP.prompts||[],PROMPTS);
-    var changed=!!(d.added.length||d.removed.length||d.modified.length);
-    logTo("pubLog","差异：新增 "+d.added.length+" / 删除 "+d.removed.length+" / 改文 "+d.modified.length);
-    var manual=($("pvIn").value||"").trim(), pv;
-    if(manual){ pv=vparse(manual)||("v"+manual.replace(/^v/i,"")); }
-    else if(curVer&&curVer===oldVer&&changed){ pv=vbump(oldVer);
-      logTo("pubLog","版本号和线上一样、内容有改动 → 自动升到 "+pv); }
-    else pv=curVer||oldVer;
-    if(!pv){ throw new Error("读不出版本号：把预设名或文件名写成「斯德哥尔摩症v2.3」这样"); }
+    logTo("pubLog","差异：新增 "+d.added.length+" / 删除 "+d.removed.length+" / 改文 "+d.modified.length
+      +" / 开关 "+((d.toggled&&d.toggled.length)||0)+(orderChanged(R.oldP,P)?" / 顺序有变":""));
+    var vc=verCheck(R);
+    if(vc.level==="block")
+      throw new Error(vc.title+" —— "+vc.msg.replace(/\n/g," "));
+    if(vc.level==="ask"){
+      var go=confirm(vc.title+"\n\n"+vc.msg+"\n\n点「确定」= 按 "+vc.pv+" 发布\n点「取消」= 回去改版本号");
+      if(!go) throw new Error("已取消：版本号没确认（"+vc.pv+"）");
+      logTo("pubLog","⚠ 版本号已人工确认 → "+vc.pv,"ok");
+    }else{
+      logTo("pubLog","版本号体检通过 → 发布为 "+vc.pv
+        +"（文件里 "+(vc.cur||"无")+" · 线上 "+(vc.old||"无")+"）");
+    }
+    var pv=vc.pv;
     P.name="斯德哥尔摩症"+pv;
 
     /* 脚本 */
@@ -1194,18 +1311,29 @@ async function doPublish(){
       if(!R.orbText) throw new Error("仓库里没读到 script/orb.js");
       var m=/ORB_VER\s*=\s*"(v[\d.]+)"/.exec(R.orbText);
       sv=m?m[1]:oldSv;
-      /* 外壳从两处找：仓库旧预设（老版本里带）→ 你自己载入的文件（从酒馆导出来的一定带） */
-      var oShell=(R.oldP.extensions&&R.oldP.extensions.tavern_helper
-        &&R.oldP.extensions.tavern_helper.scripts&&R.oldP.extensions.tavern_helper.scripts[0])
-        ||(P.extensions&&P.extensions.tavern_helper
-        &&P.extensions.tavern_helper.scripts&&P.extensions.tavern_helper.scripts[0]);
-      if(!oShell) throw new Error("找不到脚本外壳：仓库旧预设和你载入的文件里都没有脚本");
-      var shell=JSON.parse(JSON.stringify(oShell));
+      /* 外壳三级找（★2026-10-21）：仓库旧预设 → 你载入的文件 → 内置默认。
+         主预设改成「存纯的」之后，前两级经常都没有脚本，以前这里直接 throw
+         「找不到脚本外壳」把发布卡死。现在最后一级必定成功。
+         ★ 找到脚本必须连它的 tavern_helper 容器一起带走——否则把脚本塞回
+           旧预设那个不存在的容器里会直接崩（publish.py 踩过的 KeyError 同款）。 */
+      var oShell=null, oTH=null, sFrom="";
+      [[R.oldP,"仓库旧预设"],[P,"你载入的文件"]].forEach(function(pr){
+        if(oShell) return;
+        try{
+          var th=pr[0]&&pr[0].extensions&&pr[0].extensions.tavern_helper;
+          var sc=th&&th.scripts&&th.scripts[0];
+          if(sc&&sc.content){ oShell=sc; oTH=th; sFrom=pr[1]; }
+        }catch(e){}
+      });
+      var shell;
+      if(oShell){ shell=JSON.parse(JSON.stringify(oShell)); }
+      else{ shell=DEF_SHELL(); oTH={script_bindings:{},scripts:[]}; sFrom="内置默认外壳"; }
       shell.content=R.orbText;
+      var th=JSON.parse(JSON.stringify(oTH||{script_bindings:{},scripts:[]}));
+      th.scripts=[shell];
       P.extensions=P.extensions||{};
-      P.extensions.tavern_helper=JSON.parse(JSON.stringify(R.oldP.extensions.tavern_helper));
-      P.extensions.tavern_helper.scripts=[shell];
-      logTo("pubLog","内嵌脚本 "+sv+"（来自仓库当前线上版）");
+      P.extensions.tavern_helper=th;
+      logTo("pubLog","内嵌脚本 "+sv+"（来自仓库当前线上版，外壳取自「"+sFrom+"」）");
     }else{
       var mySc=P.extensions&&P.extensions.tavern_helper
         &&P.extensions.tavern_helper.scripts&&P.extensions.tavern_helper.scripts[0];
@@ -1614,6 +1742,11 @@ function bindBtns(){
   $("sch").oninput=function(){ renderList(); };
   $("bPub").onclick=doPublish;
   $("bDl").onclick=doDownload;
+  /* 版本号框里手改 → 体检卡片立刻跟着变，别等发布时才告诉他对不上 */
+  $("pvIn").oninput=function(){
+    if(!REMOTE||!P) return;
+    try{ $("verBox").innerHTML=verBoxHtml(verCheck(REMOTE)); }catch(e){}
+  };
   $("bNtSave").onclick=noticeSave;
   $("bNtPull").onclick=function(){ noticePull(); };
   $("bDlP").onclick=function(){ dlOne("p"); };
@@ -1651,7 +1784,10 @@ window.__PTS={
   groups:function(){ return GROUPS; }, prompts:function(){ return PROMPTS; },
   preset:function(){ return P; }, remote:function(){ return REMOTE; },
   edit:openEditor, save:saveEditor, del:delItem,
-  diff:diffPrompts, same:sameItem, vparse:vparse, vbump:vbump,
+  diff:diffPrompts, same:sameItem, vparse:vparse, vbump:vbump, vcmp:vcmp,
+  verCheck:verCheck, verBox:verBoxHtml, defShell:DEF_SHELL,
+  hasChange:hasChange, orderChanged:orderChanged,
+  setRemote:function(o){ REMOTE=o; },
   b64enc:b64enc, b64dec:b64dec, gidOf:gidOf, gMove:gMove, slug:slug,
   addToOrder:addToOrder, delFromOrder:delFromOrder,
   autoVer:autoVer, myScriptVer:myScriptVer,
