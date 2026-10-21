@@ -1176,6 +1176,27 @@ function autoVer(){
   if(cur&&cur===old&&changed) return vbump(old);
   return cur||old;
 }
+/* ★预设里「内置的版本号」：extensions.sk_orb.pver
+   脚本判定有没有更新时【优先读它】，读不到才退回预设名末尾（2026-10-21 核实）。
+   所以发布时不能只改预设名 —— 内置那个还是旧的，别人装完会立刻收到「有更新」，
+   或者内置的比发布的新时永远不提示。两边必须一起改成同一个版本号。 */
+function pverOf(p){
+  try{
+    var x=p&&p.extensions&&p.extensions.sk_orb;
+    return (x&&x.pver)?String(x.pver):"";
+  }catch(e){ return ""; }
+}
+function pverSetInto(p,pv){
+  try{
+    if(!pv) return false;
+    p.extensions=p.extensions||{};
+    var x=p.extensions.sk_orb;
+    if(!x||typeof x!=="object") x={};
+    x.pver=String(pv);
+    p.extensions.sk_orb=x;
+    return true;
+  }catch(e){ return false; }
+}
 /* 版本号比大小：返回 -1/0/1（不能只比相等，2.10 要比 2.9 新） */
 function vcmp(a,b){
   var pa=String(a||"").replace(/^v/i,"").split(".");
@@ -1193,16 +1214,28 @@ function vcmp(a,b){
      要发旧版 → 直接拦下，绝不许把索引指回旧版 */
 function verCheck(R){
   var old=(R&&R.man&&R.man.preset&&R.man.preset.version)||"";
-  var cur=(P&&vparse(P.name))||"";
+  /* 脚本判定用的是「内置版本号」优先，所以体检也必须以它为准 */
+  var inner=pverOf(P)||"";
+  var nmVer=(P&&vparse(P.name))||"";
+  var cur=inner||nmVer;
   var manual=($("pvIn").value||"").trim();
   var d=diffPrompts((R&&R.oldP&&R.oldP.prompts)||[],PROMPTS||[]);
   var changed=hasChange(d,R&&R.oldP,P);
-  var pv=manual ? (vparse(manual)||("v"+manual.replace(/^v/i,"")))
-                : ((cur&&cur===old&&changed)?vbump(old):(cur||old));
-  var r={pv:pv,cur:cur,old:old,changed:changed,level:"ok",title:"",msg:""};
+  var pv;
+  if(manual){
+    pv=vparse(manual)||("v"+manual.replace(/^v/i,""));      /* 手填的说了算，但发旧版照样拦 */
+  }else if(changed){
+    /* 内容有改动：版本号必须比线上新。
+       内置的/预设名里已经领先（比如你自己改成 v2.8）→ 用那个；
+       没领先（还停在 v2.5、v2.6）→ 自动升到线上+1，别把新版憋成旧版发出去。 */
+    pv=(cur&&vcmp(cur,old)>0)?cur:vbump(old);
+  }else{
+    pv=cur||old;
+  }
+  var r={pv:pv,cur:cur,old:old,changed:changed,inner:inner,nmVer:nmVer,level:"ok",title:"",msg:""};
   if(!pv||!/^v\d/.test(pv)){
     r.level="block"; r.title="读不出版本号";
-    r.msg="预设名和版本号框里都没写着 vX.Y 这样的版本号，没法判断该发成哪一版。";
+    r.msg="预设里既没有内置版本号，预设名/版本号框里也没写着 vX.Y，没法判断该发成哪一版。";
     return r;
   }
   if(old&&vcmp(pv,old)<0){
@@ -1212,9 +1245,13 @@ function verCheck(R){
   }
   var msgs=[];
   if(cur&&cur!==pv)
-    msgs.push("你文件里的预设名写着 "+cur+"，这次会发布成 "+pv+"（发布时自动把预设名改成「斯德哥尔摩症"+pv+"」）。");
+    msgs.push("你文件里的版本号是 "+cur+"（"+(inner?"预设内置":"预设名末尾")+"），这次会发布成 "+pv
+      +" → 预设名和内置版本号会一起改成 "+pv+"。");
   if(!cur)
-    msgs.push("你文件里的预设名读不出版本号，发布时会写成「斯德哥尔摩症"+pv+"」。");
+    msgs.push("你文件里读不出版本号（内置的没有、预设名里也没有），发布会写成「斯德哥尔摩症"+pv+"」并记下内置版本号 "+pv+"。");
+  if(inner&&nmVer&&inner!==nmVer)
+    msgs.push("注意：预设内置版本号是 "+inner+"，预设名末尾却写着 "+nmVer+"。脚本按【内置的 "+inner
+      +"】判定更新，发布后两边统一成 "+pv+"。");
   if(pv===old&&changed)
     msgs.push("内容有改动，但版本号还是 "+old+" → 别人【不会】收到更新提示（悬浮球比的是版本号大小）。建议发成 "+vbump(old)+"。");
   if(pv===old&&!changed)
@@ -1234,7 +1271,8 @@ function verBoxHtml(vc){
   };
   var h='<div style="margin-top:9px;padding:10px 12px;border-radius:9px;background:#faf8f4;'
     +'border:1px solid #eee9df;font-size:12.5px;line-height:1.75;color:#3a352c">'
-    +row("文件里写着",vc.cur||"（读不到）")
+    +row("文件里写着",(vc.cur||"（读不到）")
+      +(vc.inner?"（内置）":(vc.cur?"（预设名）":"")))
     +row("仓库线上",vc.old||"—")
     +row("这次发布为",vc.pv,col);
   if(vc.msg) h+='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #e5dfd2;color:'+col+'">'
@@ -1304,6 +1342,13 @@ async function doPublish(){
     }
     var pv=vc.pv;
     P.name="斯德哥尔摩症"+pv;
+    /* ★内置版本号必须一起改：脚本判定「有没有更新」优先读 extensions.sk_orb.pver，
+       只改预设名的话，内置那个还是旧的 → 别人装完立刻收到「有更新」，
+       或者内置的比发布的新时永远不提示。两边必须统一。 */
+    if(pverSetInto(P,pv))
+      logTo("pubLog","预设内置版本号写成 "+pv+"（脚本按它判定更新，和预设名一起改）");
+    else
+      logTo("pubLog","⚠ 内置版本号没写进去（发布照常，但脚本会退回按预设名判定）");
 
     /* 脚本 */
     var useScript=$("ckScript").checked, sv=oldSv;
