@@ -558,9 +558,6 @@
   ],
   "sk_orb": {
    "pver": "v2.7"
-  },
-  "tavern_helper": {
-   "script_bindings": {}
   }
  },
  "frequency_penalty": 0,
