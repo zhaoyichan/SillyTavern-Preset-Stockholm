@@ -1,20 +1,1129 @@
 {
- "impersonation_prompt": "[Write your next reply from the point of view of {{user}}, using the chat history so far as a guideline for the writing style of {{user}}. Don't write as {{char}} or system. Don't describe actions of {{char}}.]",
- "new_chat_prompt": "",
- "new_group_chat_prompt": "[Start a new group chat. Group members: {{group}}]",
- "new_example_chat_prompt": "[Example Chat]",
+ "assistant_impersonation": "",
+ "assistant_prefill": "<liwe>\n",
+ "bias_preset_selected": "Default (none)",
  "continue_nudge_prompt": "[Continue the following message. Do not include ANY parts of the original message. Use capitalization and punctuation as if your reply is a part of the original message: {{lastChatMessage}}]",
- "scenario_format": "{{scenario}}",
- "personality_format": "{{personality}}",
+ "continue_postfix": " ",
+ "continue_prefill": false,
+ "enable_web_search": false,
+ "extensions": {
+  "SPreset": {
+   "ChatSquash": {
+    "enabled": false
+   },
+   "FixedPresetName": "",
+   "MacroNest": false,
+   "MessageInjections": {},
+   "OutputPreprocessing": {
+    "enabled": false
+   },
+   "RegexBinding": {
+    "regexes": []
+   },
+   "ToolBindings": {}
+  },
+  "baibaiToolkit": {
+   "regexGroups": {
+    "version": 1,
+    "groups": [],
+    "scripts": {
+     "b2f3e4d5-c6a7-4890-b1c2-d3e4f5a6b7c8": {
+      "groupId": "__ungrouped",
+      "order": 0
+     },
+     "a1f2e3d4-b5c6-4789-a0b1-c2d3e4f5a6b7": {
+      "groupId": "__ungrouped",
+      "order": 1
+     },
+     "render-state-meta-12": {
+      "groupId": "__ungrouped",
+      "order": 2
+     },
+     "4499dd11-ff22-4a33-bb44-cc55dd66ee88": {
+      "groupId": "__ungrouped",
+      "order": 3
+     },
+     "render-state-fld-14": {
+      "groupId": "__ungrouped",
+      "order": 4
+     },
+     "render-state-sum-13": {
+      "groupId": "__ungrouped",
+      "order": 5
+     },
+     "anchor-render-0001": {
+      "groupId": "__ungrouped",
+      "order": 6
+     },
+     "render-anchor-favor-18": {
+      "groupId": "__ungrouped",
+      "order": 7
+     },
+     "render-anchor-social-17": {
+      "groupId": "__ungrouped",
+      "order": 8
+     },
+     "render-anchor-impact-16": {
+      "groupId": "__ungrouped",
+      "order": 9
+     },
+     "render-anchor-dossier-15": {
+      "groupId": "__ungrouped",
+      "order": 10
+     },
+     "render-anchor-dossier-fb-19": {
+      "groupId": "__ungrouped",
+      "order": 11
+     },
+     "choices-strip-0001": {
+      "groupId": "__ungrouped",
+      "order": 12
+     },
+     "choices-render-0002": {
+      "groupId": "__ungrouped",
+      "order": 13
+     },
+     "dice-render-0001": {
+      "groupId": "__ungrouped",
+      "order": 14
+     },
+     "dice-strip-0001": {
+      "groupId": "__ungrouped",
+      "order": 15
+     },
+     "compress-depth4-keep3": {
+      "groupId": "__ungrouped",
+      "order": 16
+     },
+     "canon-render-0001": {
+      "groupId": "__ungrouped",
+      "order": 17
+     },
+     "canon-strip-0001": {
+      "groupId": "__ungrouped",
+      "order": 18
+     },
+     "inner-os-render-0001": {
+      "groupId": "__ungrouped",
+      "order": 19
+     },
+     "theater-strip-0001": {
+      "groupId": "__ungrouped",
+      "order": 20
+     },
+     "theater-render-0002": {
+      "groupId": "__ungrouped",
+      "order": 21
+     },
+     "commentary-strip-0001": {
+      "groupId": "__ungrouped",
+      "order": 22
+     },
+     "commentary-render-0002": {
+      "groupId": "__ungrouped",
+      "order": 23
+     },
+     "danmaku-strip-0001": {
+      "groupId": "__ungrouped",
+      "order": 24
+     },
+     "danmaku-render-0002": {
+      "groupId": "__ungrouped",
+      "order": 25
+     },
+     "map-strip-0001": {
+      "groupId": "__ungrouped",
+      "order": 26
+     },
+     "render-map-07": {
+      "groupId": "__ungrouped",
+      "order": 27
+     },
+     "opp-strip-0001": {
+      "groupId": "__ungrouped",
+      "order": 28
+     },
+     "render-opp-08": {
+      "groupId": "__ungrouped",
+      "order": 29
+     },
+     "render-opp-item-09": {
+      "groupId": "__ungrouped",
+      "order": 30
+     }
+    },
+    "ungrouped": {
+     "name": "默认分组",
+     "collapsed": false
+    }
+   }
+  },
+  "regex_scripts": [
+   {
+    "disabled": false,
+    "findRegex": "/<liwe>[\\s\\S]*?<\\/liwe>/gsi",
+    "id": "b2f3e4d5-c6a7-4890-b1c2-d3e4f5a6b7c8",
+    "markdownOnly": false,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": true,
+    "replaceString": "",
+    "runOnEdit": true,
+    "scriptName": "[必要]删除历史思维链（不发送给AI）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<liwe>([\\s\\S]*?)<\\/liwe>/gsi",
+    "id": "a1f2e3d4-b5c6-4789-a0b1-c2d3e4f5a6b7",
+    "markdownOnly": true,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": false,
+    "replaceString": "<style>\n.lw{font-family:'Songti SC','STSong',serif}\n.lw-c{margin:12px 0;background:#f3f1ec;border:1px solid #e7e2d8;border-radius:4px;box-shadow:0 2px 6px rgba(29,27,24,.04),0 12px 28px -16px rgba(29,27,24,.2);overflow:hidden}\n.lw-c>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:11px 14px;background:linear-gradient(180deg,#fdfcfa,#f6f4ee);user-select:none;-webkit-tap-highlight-color:transparent}\n.lw-c[open]>summary{border-bottom:1px solid #e7e2d8}\n.lw-c>summary::-webkit-details-marker{display:none}\n.lw-c>summary::after{content:\"\\25B8\";margin-left:auto;color:#b3ada0;font-size:12px;transition:transform .25s}\n.lw-c[open]>summary::after{transform:rotate(90deg);color:#a33232}\n.lw-n{font-size:15px;font-weight:700;color:#cdc6b8;padding-right:10px;border-right:1px solid #e7e2d8;line-height:1}\n.lw-t{display:flex;flex-direction:column;gap:2px}\n.lw-t b{font-size:13.5px;font-weight:700;letter-spacing:.14em;color:#1d1b18}\n.lw-t i{font-style:normal;font-size:8px;letter-spacing:.22em;color:#b3ada0;text-transform:uppercase}\n.lw-b{padding:13px 14px 15px;color:#4a463f;font-size:13px;line-height:1.85;max-height:min(48vh,460px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin}\n.lw-b::-webkit-scrollbar{width:3px}\n.lw-b::-webkit-scrollbar-thumb{background:rgba(29,27,24,.2);border-radius:2px}\n.lw-b::-webkit-scrollbar-track{background:transparent}\n.lw-th{max-height:min(48vh,460px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;font-size:13px;line-height:1.85;text-align:justify;white-space:pre-wrap;word-break:break-word;padding:12px 14px;scrollbar-width:thin}\n.lw-mono{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;line-height:1.9;white-space:pre-wrap;word-break:break-word}\n.lw-x{font-style:italic;color:#8a7f6d}\n.lw-x b{color:#a8863f;opacity:.7;font-weight:400}\n.lw-m{font-size:9px;letter-spacing:.2em;color:#b3ada0;margin:2px 0 7px;display:flex;align-items:center;gap:7px}\n.lw-m::after{content:\"\";flex:1;height:1px;background:linear-gradient(90deg,#e7e2d8,transparent)}\n.lw-map{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e7e2d8;border-top:1px solid #e7e2d8}\n.lw-c9{aspect-ratio:1/1;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:4px;text-align:center}\n.lw-dir{font-size:8.5px;letter-spacing:.22em;color:#b3ada0}\n.lw-nm{font-size:12.5px;font-weight:700;color:#1d1b18;word-break:break-all;line-height:1.3}\n.lw-sup{font-size:9px;font-weight:700;color:#a33232;vertical-align:super;margin-left:1px}\n.lw-core{background:#221f1b;box-shadow:inset 0 0 0 3px rgba(255,255,255,.06)}\n.lw-core span{font-size:12.5px;font-weight:700;letter-spacing:.3em;text-indent:.3em;color:#efe7d8}\n.lw-leg{display:flex;align-items:center;gap:7px;padding:8px 14px;font-size:10px;letter-spacing:.06em;color:#b3ada0;background:#faf8f4;border-top:1px solid #f0ece4}\n.lw-dot{width:5px;height:5px;background:#a33232;border-radius:50%;display:block;flex:none}\n.lw-o{position:relative;padding:2px 0 10px 13px;margin-bottom:10px}\n.lw-o::before{content:\"\";position:absolute;left:0;top:5px;bottom:12px;width:2px;background:#a33232}\n.lw-o b{display:block;font-size:12.5px;font-weight:700;color:#a33232;letter-spacing:.1em;margin-bottom:3px}\n.lw-o p{margin:0;font-size:13px;line-height:1.85;text-align:justify;word-break:break-word}\n.lw-mt{display:flex;flex-wrap:wrap;gap:2px 14px;padding:7px 14px;background:#faf8f4;border-bottom:1px solid #f0ece4;font-size:10.5px;letter-spacing:.05em;color:#837d71}\n.lw-r{height:1px;margin:13px 0;background:linear-gradient(90deg,transparent,#e7e2d8 18%,#e7e2d8 82%,transparent)}\n.lw-q{position:relative;padding-left:12px;font-size:13.5px;line-height:1.95;text-align:justify;word-break:break-word}\n.lw-q::before{content:\"\";position:absolute;left:0;top:5px;bottom:5px;width:2px;background:linear-gradient(180deg,#a33232,rgba(163,50,50,.15))}\n.lw-k{display:flex;align-items:flex-start;gap:8px;padding:3px 0;line-height:1.75;font-size:12.5px;word-break:break-word}\n.lw-k>span:last-child{flex:1;min-width:0}\n.lw-s{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 4px;color:#a33232;font-weight:700;border:1px solid rgba(163,50,50,.4);background:rgba(163,50,50,.06);border-radius:2px;font-size:10.5px;flex:none}\n.lw-s2{color:#837d71;border-color:#e7e2d8;background:transparent}\n.lw-hn{display:flex;align-items:baseline;gap:8px;border-bottom:1px solid #f0ece4;padding-bottom:7px;margin:2px 0 9px}\n.lw-hn b{font-size:16.5px;font-weight:700;color:#141210}\n.lw-hn span{font-size:10px;color:#b3ada0}\n.lw-g2{display:grid;grid-template-columns:repeat(auto-fill,minmax(102px,1fr));gap:1px;background:#f0ece4;border:1px solid #f0ece4;border-radius:3px;overflow:hidden}\n.lw-cell{background:#fff;padding:8px 10px}\n.lw-cell em{font-style:normal;display:block;font-size:9px;letter-spacing:.18em;color:#b3ada0}\n.lw-cell strong{display:block;margin-top:3px;font-size:12.5px;font-weight:700;color:#1d1b18;line-height:1.5;word-break:break-word}\n.lw-a{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:8px 0;background:#efece5;border:1px solid #f0ece4;border-radius:3px}\n.lw-a .lab{font-size:10px;font-weight:700;letter-spacing:.12em;color:#837d71;flex:none}\n.lw-bar{flex:1;height:4px;background:#e3ded3;border-radius:2px;overflow:hidden}\n.lw-bar span{display:block;height:100%;background:linear-gradient(90deg,#a33232,#c15050)}\n.lw-v{font-size:16px;font-weight:700;color:#a33232;line-height:1}\n</style><details class=\"lw-c\"><summary><span class=\"lw-n\">✦</span><span class=\"lw-t\"><b>幕后手记</b><i>Director's Notes</i></span></summary><div class=\"lw-th\">$1</div></details>",
+    "runOnEdit": true,
+    "scriptName": "✦ 幕后手记（卷宗风·样式注入点）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "🗂️ 状态快照·顶部信息条",
+    "id": "render-state-meta-12",
+    "findRegex": "/<state>([\\s\\S]*?)\\[回合\\]\\s*([^\\n]*)\\s*\\n([\\s\\S]*?)\\[时间\\]\\s*([^\\n]*)\\s*\\n([\\s\\S]*?)\\[场景\\]\\s*([^\\n]*)\\s*\\n?([\\s\\S]*?)<\\/state>/gsi",
+    "replaceString": "<state><div class=\"lw-mt\"><span>回合 $2</span><span>$4</span><span>$6</span></div>$1$3$5$7</state>"
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<state>([\\s\\S]*?)<\\/state>/gsi",
+    "id": "4499dd11-ff22-4a33-bb44-cc55dd66ee88",
+    "markdownOnly": true,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": false,
+    "replaceString": "<details class=\"lw-c\"><summary><span class=\"lw-n\">01</span><span class=\"lw-t\"><b>状态快照</b><i>Status Snapshot</i></span></summary><div class=\"lw-b\">$1</div></details>",
+    "runOnEdit": true,
+    "scriptName": "🗂️ 状态快照（卷宗风）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "🗂️ 状态快照·字段",
+    "id": "render-state-fld-14",
+    "findRegex": "/(^|[\\n>])\\[(章节|回合|时间|场景|在场|离线|关系|暗线|同人|元知识|玩家偏移|不可逆)\\]\\s*([^\\n]*)/gm",
+    "replaceString": "$1<div class=\"lw-k\"><span class=\"lw-s lw-s2\">$2</span><span>$3</span></div>"
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "🗂️ 状态快照·摘要",
+    "id": "render-state-sum-13",
+    "findRegex": "/^\\[摘要\\]\\s*([^\\n]*)/gmi",
+    "replaceString": "<div class=\"lw-m\">摘要 · Summary</div><div class=\"lw-q\">$1</div><div class=\"lw-r\"></div>"
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<anchor>([\\s\\S]*?)<\\/anchor>/gsi",
+    "id": "anchor-render-0001",
+    "markdownOnly": true,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": false,
+    "replaceString": "<details class=\"lw-c\"><summary><span class=\"lw-n\">02</span><span class=\"lw-t\"><b>角色档案</b><i>Character Dossier</i></span></summary><div class=\"lw-b\">$1</div></details>",
+    "runOnEdit": true,
+    "scriptName": "📌 角色档案（卷宗风）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "📌 角色档案·好感",
+    "id": "render-anchor-favor-18",
+    "findRegex": "/\\[好感\\]\\s*([^:\\n]+?)\\s*[:：]\\s*(-?\\d+)/g",
+    "replaceString": "<div class=\"lw-a\"><span class=\"lab\">好感 · $1</span><span class=\"lw-bar\"><span style=\"width:max(0%,min(100%,calc($2 * 5%)))\"></span></span><span class=\"lw-v\">$2</span></div>"
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "📌 角色档案·社会位置",
+    "id": "render-anchor-social-17",
+    "findRegex": "/\\[社会位置·着装\\]\\s*([^:\\n]+?)\\s*[:：]\\s*([^/\\n]*)\\/([^/\\n]*)\\/([^/\\n]*)\\/([^/\\n]*)\\/([^\\n]*)/g",
+    "replaceString": "<div style=\"margin-bottom:12px\"><div class=\"lw-m\">$1 · 社会位置</div><div class=\"lw-g2\"><div class=\"lw-cell\"><em>颜值</em><strong>$2</strong></div><div class=\"lw-cell\"><em>学历</em><strong>$3</strong></div><div class=\"lw-cell\"><em>阶层</em><strong>$4</strong></div><div class=\"lw-cell\"><em>出身</em><strong>$5</strong></div><div class=\"lw-cell\"><em>着装</em><strong>$6</strong></div></div></div>"
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "📌 角色档案·影响",
+    "id": "render-anchor-impact-16",
+    "findRegex": "/\\[影响\\]\\s*([^:\\n]+?)\\s*[:：]\\s*([^\\n]*)/g",
+    "replaceString": "<div class=\"lw-k\"><span class=\"lw-s lw-s2\">影响</span><span><b style=\"font-weight:700;color:#1d1b18\">$1</b> · $2</span></div>"
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "📌 角色档案·角色锚",
+    "id": "render-anchor-dossier-15",
+    "findRegex": "/\\[角色锚\\]\\s*([^:\\n|]+?)\\s*[:：]\\s*([^|\\n]*)\\|([^|\\n]*)\\|([^|\\n]*)\\|([^|\\n]*)\\|([^|\\n]*)\\|([^\\n]*)/g",
+    "replaceString": "<div style=\"margin-bottom:16px\"><div class=\"lw-hn\"><b>$1</b><span>$2</span></div><div class=\"lw-k\"><span class=\"lw-s\">欲</span><span>$3</span></div><div class=\"lw-k\"><span class=\"lw-s\">惧</span><span>$4</span></div><div class=\"lw-k\"><span class=\"lw-s\">底</span><span>$5</span></div><div class=\"lw-k\"><span class=\"lw-s\">欺</span><span>$6</span></div><div class=\"lw-k\"><span class=\"lw-s lw-s2\">认知</span><span>$7</span></div></div>"
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "📌 角色档案·角色锚（兜底）",
+    "id": "render-anchor-dossier-fb-19",
+    "findRegex": "/\\[角色锚\\]\\s*([^:\\n]+?)\\s*[:：]\\s*([^\\n]*)/g",
+    "replaceString": "<div style=\"margin-bottom:16px\"><div class=\"lw-hn\"><b>$1</b></div><div class=\"lw-k\"><span class=\"lw-s lw-s2\">锚</span><span>$2</span></div></div>"
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<choices>[\\s\\S]*?<\\/choices>/gsi",
+    "id": "choices-strip-0001",
+    "markdownOnly": false,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": true,
+    "replaceString": "",
+    "runOnEdit": true,
+    "scriptName": "[必要]删除历史choices（不发送给AI）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<choices>([\\s\\S]*?)<\\/choices>/gsi",
+    "id": "choices-render-0002",
+    "markdownOnly": true,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": false,
+    "replaceString": "<details class=\"lw-c\"><summary><span class=\"lw-n\">◇</span><span class=\"lw-t\"><b>剧情选项</b><i>Choices</i></span></summary><div class=\"lw-b\"><div style=\"white-space:pre-wrap;word-break:break-word\">$1</div></div></details>",
+    "runOnEdit": true,
+    "scriptName": "◇ 剧情选项（卷宗风）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<dice>\\s*([\\s\\S]*?)<\\/dice>/gsi",
+    "id": "dice-render-0001",
+    "markdownOnly": true,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": false,
+    "replaceString": "<details class=\"lw-c\"><summary><span class=\"lw-n\">⚄</span><span class=\"lw-t\"><b>命运骰 · 判定</b><i>Dice Roll</i></span></summary><div class=\"lw-b\"><div class=\"lw-mono\" style=\"color:#6b6250\">$1</div></div></details>",
+    "runOnEdit": true,
+    "scriptName": "⚄ 命运骰（卷宗风·折叠即藏结果）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<dice>[\\s\\S]*?<\\/dice>/gsi",
+    "id": "dice-strip-0001",
+    "markdownOnly": false,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": true,
+    "replaceString": "",
+    "runOnEdit": true,
+    "scriptName": "[必要]删除历史骰子（不发送给AI）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<content>[\\s\\S]*?<\\/content>/gsi",
+    "id": "compress-depth4-keep3",
+    "markdownOnly": false,
+    "maxDepth": null,
+    "minDepth": 4,
+    "placement": [
+     2
+    ],
+    "promptOnly": true,
+    "replaceString": "",
+    "runOnEdit": true,
+    "scriptName": "[必要]旧层压缩·depth≥4只留state（保最新三层正文）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<canon>([\\s\\S]*?)<\\/canon>/gsi",
+    "id": "canon-render-0001",
+    "markdownOnly": true,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": false,
+    "replaceString": "<details class=\"lw-c\"><summary><span class=\"lw-n\">❧</span><span class=\"lw-t\"><b>原作参考</b><i>Canon Reference</i></span></summary><div class=\"lw-b\"><div style=\"white-space:pre-wrap;word-break:break-word\">$1</div></div></details>",
+    "runOnEdit": true,
+    "scriptName": "❧ 原作参考（卷宗风）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<canon>[\\s\\S]*?<\\/canon>/gsi",
+    "id": "canon-strip-0001",
+    "markdownOnly": false,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": true,
+    "replaceString": "",
+    "runOnEdit": true,
+    "scriptName": "[必要]删除历史canon（不发送给AI）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<inner\\s+char=\"([^\"]+)\">([\\s\\S]*?)<\\/inner>/gsi",
+    "id": "inner-os-render-0001",
+    "markdownOnly": true,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": false,
+    "replaceString": "<span class=\"lw-x\" data-char=\"$1\"><b>「</b>$2<b>」</b></span>",
+    "runOnEdit": true,
+    "scriptName": "💭 内心话渲染（斜体小字·角色色）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<theater>[\\s\\S]*?<\\/theater>/gsi",
+    "id": "theater-strip-0001",
+    "markdownOnly": false,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": true,
+    "replaceString": "",
+    "runOnEdit": true,
+    "scriptName": "[必要]删除历史小剧场（不发送给AI）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<theater>([\\s\\S]*?)<\\/theater>/gsi",
+    "id": "theater-render-0002",
+    "markdownOnly": true,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": false,
+    "replaceString": "<details class=\"lw-c\"><summary><span class=\"lw-n\">❦</span><span class=\"lw-t\"><b>小剧场</b><i>Interlude</i></span></summary><div class=\"lw-b\"><div style=\"white-space:pre-wrap;word-break:break-word\">$1</div></div></details>",
+    "runOnEdit": true,
+    "scriptName": "❦ 小剧场（卷宗风）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<commentary>[\\s\\S]*?<\\/commentary>/gsi",
+    "id": "commentary-strip-0001",
+    "markdownOnly": false,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": true,
+    "replaceString": "",
+    "runOnEdit": true,
+    "scriptName": "[必要]删除历史commentary（不发送给AI）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<commentary>([\\s\\S]*?)<\\/commentary>/gsi",
+    "id": "commentary-render-0002",
+    "markdownOnly": true,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": false,
+    "replaceString": "<details class=\"lw-c\"><summary><span class=\"lw-n\">※</span><span class=\"lw-t\"><b>第四面墙</b><i>Commentary</i></span></summary><div class=\"lw-b\"><div style=\"font-style:italic;white-space:pre-wrap;word-break:break-word\">$1</div></div></details>",
+    "runOnEdit": true,
+    "scriptName": "※ 第四面墙（卷宗风）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<danmaku>[\\s\\S]*?<\\/danmaku>/gsi",
+    "id": "danmaku-strip-0001",
+    "markdownOnly": false,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": true,
+    "replaceString": "",
+    "runOnEdit": true,
+    "scriptName": "[必要]删除历史弹幕（不发送给AI）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "findRegex": "/<danmaku>([\\s\\S]*?)<\\/danmaku>/gsi",
+    "id": "danmaku-render-0002",
+    "markdownOnly": true,
+    "maxDepth": null,
+    "minDepth": null,
+    "placement": [
+     2
+    ],
+    "promptOnly": false,
+    "replaceString": "<details class=\"lw-c\"><summary><span class=\"lw-n\">▣</span><span class=\"lw-t\"><b>弹幕</b><i>Danmaku</i></span></summary><div class=\"lw-b\" style=\"line-height:1.95;white-space:pre-wrap;word-break:break-word\">$1</div></details>",
+    "runOnEdit": true,
+    "scriptName": "▣ 弹幕（卷宗风）",
+    "substituteRegex": 0,
+    "trimStrings": []
+   },
+   {
+    "disabled": false,
+    "markdownOnly": false,
+    "promptOnly": true,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "[必要]删除历史map（不发送给AI）",
+    "id": "map-strip-0001",
+    "findRegex": "/<map>[\\s\\S]*?<\\/map>/gsi",
+    "replaceString": ""
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "🗺️ 领地舆图（卷宗风）",
+    "id": "render-map-07",
+    "findRegex": "/<map>\\s*北:([^|\\n]*?)\\s*(\\d)?\\|东北:([^|\\n]*?)\\s*(\\d)?\\|东:([^|\\n]*?)\\s*(\\d)?\\|东南:([^|\\n]*?)\\s*(\\d)?\\|南:([^|\\n]*?)\\s*(\\d)?\\|西南:([^|\\n]*?)\\s*(\\d)?\\|西:([^|\\n]*?)\\s*(\\d)?\\|西北:([^|\\n]*?)\\s*(\\d)?\\s*<\\/map>/gsi",
+    "replaceString": "<details class=\"lw-c\"><summary><span class=\"lw-n\">03</span><span class=\"lw-t\"><b>领地舆图</b><i>Territory Map</i></span></summary><div class=\"lw-map\"><div class=\"lw-c9\"><span class=\"lw-dir\">西 北</span><span class=\"lw-nm\">$15<span class=\"lw-sup\">$16</span></span></div><div class=\"lw-c9\"><span class=\"lw-dir\">北</span><span class=\"lw-nm\">$1<span class=\"lw-sup\">$2</span></span></div><div class=\"lw-c9\"><span class=\"lw-dir\">东 北</span><span class=\"lw-nm\">$3<span class=\"lw-sup\">$4</span></span></div><div class=\"lw-c9\"><span class=\"lw-dir\">西</span><span class=\"lw-nm\">$13<span class=\"lw-sup\">$14</span></span></div><div class=\"lw-c9 lw-core\"><span>领地</span></div><div class=\"lw-c9\"><span class=\"lw-dir\">东</span><span class=\"lw-nm\">$5<span class=\"lw-sup\">$6</span></span></div><div class=\"lw-c9\"><span class=\"lw-dir\">西 南</span><span class=\"lw-nm\">$11<span class=\"lw-sup\">$12</span></span></div><div class=\"lw-c9\"><span class=\"lw-dir\">南</span><span class=\"lw-nm\">$9<span class=\"lw-sup\">$10</span></span></div><div class=\"lw-c9\"><span class=\"lw-dir\">东 南</span><span class=\"lw-nm\">$7<span class=\"lw-sup\">$8</span></span></div></div><div class=\"lw-leg\"><span class=\"lw-dot\"></span>上标数字为设施等级（1 简陋 / 2 成型 / 3 完备）</div></details>"
+   },
+   {
+    "disabled": false,
+    "markdownOnly": false,
+    "promptOnly": true,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "[必要]删除历史opportunity（不发送给AI）",
+    "id": "opp-strip-0001",
+    "findRegex": "/<opportunity>[\\s\\S]*?<\\/opportunity>/gsi",
+    "replaceString": ""
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "◭ 变数（外框）",
+    "id": "render-opp-08",
+    "findRegex": "/<opportunity>([\\s\\S]*?)<\\/opportunity>/gsi",
+    "replaceString": "<details class=\"lw-c\"><summary><span class=\"lw-n\">04</span><span class=\"lw-t\"><b>变数</b><i>Opportunity & Peril</i></span></summary><div class=\"lw-b\"><div style=\"padding-top:2px\">$1</div></div></details>"
+   },
+   {
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "placement": [
+     2
+    ],
+    "substituteRegex": 0,
+    "trimStrings": [],
+    "minDepth": null,
+    "maxDepth": null,
+    "scriptName": "◭ 变数（分条）",
+    "id": "render-opp-item-09",
+    "findRegex": "/◆\\s*(决策|发现|人物|危机)\\s*[:：]\\s*([^◆]*?)\\s*(?=◆|<\\/div>|$)/g",
+    "replaceString": "<div class=\"lw-o\"><b>$1</b><p>$2</p></div>"
+   }
+  ],
+  "sk_groups": [
+   {
+    "id": "core",
+    "nm": "核心规则",
+    "m": [
+     "✦ Liwe 本体",
+     "✦ 人类基准·誓言",
+     "✦ 世界逻辑",
+     "✦ 叙事总纲"
+    ]
+   },
+   {
+    "id": "char",
+    "nm": "角色 · 场景",
+    "m": [
+     "✷ NPC 主体性",
+     "✷ 新角色入场",
+     "✷ 角色锚",
+     "✷ 信息边界·防全知",
+     "✷ 用户档案",
+     "✷ 角色外貌",
+     "✷ 角色性格",
+     "✷ 场景",
+     "✷ 对话范例"
+    ]
+   },
+   {
+    "id": "flow",
+    "nm": "推演 · 输出",
+    "m": [
+     "✹ 推演流程",
+     "✼ 输出·强制"
+    ]
+   },
+   {
+    "id": "book",
+    "nm": "世界书 · 历史",
+    "m": [
+     "✸ 约束",
+     "✶ 世界书·前",
+     "✶ 世界书·后",
+     "✼ 历史"
+    ]
+   },
+   {
+    "id": "style",
+    "nm": "篇幅 · 文风",
+    "m": [
+     "✹ 篇幅·长",
+     "✹ 双语对白",
+     "✹ 英文输出",
+     "✹ 人称（在此填人称）",
+     "✹ 文风·病态虐恋",
+     "✹ 文风·沙雕",
+     "✹ char第1人称吐槽",
+     "✹ 文风·轻小说",
+     "✹ 对白主导"
+    ]
+   },
+   {
+    "id": "diff",
+    "nm": "难度 · 世界的态度",
+    "m": [
+     "✹ 世界难度·最高",
+     "✹ 简单模式",
+     "✹ 无脑爽",
+     "✹ 导演偏心",
+     "✹ 血肉之躯",
+     "✹ 社会鄙视链",
+     "✹ 黑暗森林"
+    ]
+   },
+   {
+    "id": "tempo",
+    "nm": "节奏 · 结构",
+    "m": [
+     "✹ 伏笔追踪",
+     "✹ 平行世界·离线",
+     "✹ 末尾钩子",
+     "✹ 缓慢节奏",
+     "✹ 群像镜头外",
+     "✹ 抢话·普通",
+     "✹ 抢话·疯狂"
+    ]
+   },
+   {
+    "id": "play",
+    "nm": "可选玩法",
+    "m": [
+     "✹ 用户入镜",
+     "✹ 破甲",
+     "✹ 抗截断·安全尾",
+     "✹ NSFW",
+     "✹ 防乱发情",
+     "✹ 小猫娘",
+     "✹ 骰子",
+     "✹ 经济·科技",
+     "✹ 任务承诺追踪",
+     "✹ 剧情选项",
+     "✹ 拷打",
+     "✹ 神人弹幕"
+    ]
+   },
+   {
+    "id": "fan",
+    "nm": "同人",
+    "m": [
+     "✹ 同人导演",
+     "✹ 同人·简版",
+     "✹ 同人·详细版"
+    ]
+   },
+   {
+    "id": "end",
+    "nm": "终局",
+    "m": [
+     "🎬 终局·编年史",
+     "🎬 终局·众生录",
+     "🎬 终局·回响·日记"
+    ]
+   },
+   {
+    "id": "theater",
+    "nm": "小剧场 · 番外",
+    "m": [
+     "🎭 第四面墙吐槽"
+    ]
+   },
+   {
+    "id": "slot",
+    "nm": "酒馆固定槽位 · 别动",
+    "m": [
+     "Agent System Prompt",
+     "Agent Results",
+     "Main Prompt",
+     "Post-History Instructions",
+     "Agent Task",
+     "Enhance Definitions",
+     "贩子死妈（勿开）"
+    ]
+   }
+  ],
+  "sk_orb": {
+   "pver": "v2.8"
+  },
+  "tavern_helper": {
+   "script_bindings": {}
+  }
+ },
+ "frequency_penalty": 0,
+ "function_calling": false,
  "group_nudge_prompt": "[Write the next reply only as {{char}}.]",
- "wi_format": "{0}",
+ "impersonation_prompt": "[Write your next reply from the point of view of {{user}}, using the chat history so far as a guideline for the writing style of {{user}}. Don't write as {{char}} or system. Don't describe actions of {{char}}.]",
+ "inline_image_quality": "auto",
+ "max_context_unlocked": true,
+ "media_inlining": false,
+ "min_p": 0,
+ "n": 1,
+ "name": "斯德哥尔摩症v2.8",
+ "names_behavior": -1,
+ "new_chat_prompt": "",
+ "new_example_chat_prompt": "[Example Chat]",
+ "new_group_chat_prompt": "[Start a new group chat. Group members: {{group}}]",
+ "openai_max_context": 2000000,
+ "openai_max_tokens": 16384,
+ "personality_format": "{{personality}}",
+ "presence_penalty": 0,
+ "prompt_order": [
+  {
+   "character_id": 100001,
+   "order": [
+    {
+     "identifier": "no-resale",
+     "enabled": false
+    },
+    {
+     "identifier": "liwe-core",
+     "enabled": true
+    },
+    {
+     "identifier": "fanfic-director",
+     "enabled": false
+    },
+    {
+     "identifier": "human-oath",
+     "enabled": false
+    },
+    {
+     "identifier": "world-logic",
+     "enabled": true
+    },
+    {
+     "identifier": "narrative-frame",
+     "enabled": true
+    },
+    {
+     "identifier": "npc-subjectivity",
+     "enabled": true
+    },
+    {
+     "identifier": "user-echo",
+     "enabled": false
+    },
+    {
+     "identifier": "new-character",
+     "enabled": true
+    },
+    {
+     "identifier": "character-anchor",
+     "enabled": true
+    },
+    {
+     "identifier": "info-boundary",
+     "enabled": true
+    },
+    {
+     "identifier": "constraints",
+     "enabled": true
+    },
+    {
+     "identifier": "jailbreak-guided",
+     "enabled": false
+    },
+    {
+     "identifier": "anti-truncation",
+     "enabled": false
+    },
+    {
+     "identifier": "flow-guide",
+     "enabled": true
+    },
+    {
+     "identifier": "reply-length-long",
+     "enabled": true
+    },
+    {
+     "identifier": "output-format",
+     "enabled": true
+    },
+    {
+     "identifier": "worldInfoBefore",
+     "enabled": true
+    },
+    {
+     "identifier": "worldInfoAfter",
+     "enabled": true
+    },
+    {
+     "identifier": "personaDescription",
+     "enabled": true
+    },
+    {
+     "identifier": "charDescription",
+     "enabled": true
+    },
+    {
+     "identifier": "charPersonality",
+     "enabled": true
+    },
+    {
+     "identifier": "scenario",
+     "enabled": true
+    },
+    {
+     "identifier": "dialogueExamples",
+     "enabled": true
+    },
+    {
+     "identifier": "chatHistory",
+     "enabled": true
+    },
+    {
+     "identifier": "coda-chronicle",
+     "enabled": false
+    },
+    {
+     "identifier": "coda-pantheon",
+     "enabled": false
+    },
+    {
+     "identifier": "coda-diary",
+     "enabled": false
+    },
+    {
+     "identifier": "bilingual-dialogue",
+     "enabled": false
+    },
+    {
+     "identifier": "lang-en",
+     "enabled": false
+    },
+    {
+     "identifier": "nsfw",
+     "enabled": false
+    },
+    {
+     "identifier": "no-nsfw",
+     "enabled": false
+    },
+    {
+     "identifier": "narration-person",
+     "enabled": false
+    },
+    {
+     "identifier": "style-bing-tai-nue-lian",
+     "enabled": false
+    },
+    {
+     "identifier": "style-sha-diao",
+     "enabled": false
+    },
+    {
+     "identifier": "style-char-1st-pov",
+     "enabled": false
+    },
+    {
+     "identifier": "style-lightnovel",
+     "enabled": false
+    },
+    {
+     "identifier": "foreshadowing",
+     "enabled": false
+    },
+    {
+     "identifier": "parallel-world",
+     "enabled": false
+    },
+    {
+     "identifier": "ending-hook",
+     "enabled": false
+    },
+    {
+     "identifier": "slow-pace",
+     "enabled": false
+    },
+    {
+     "identifier": "world-difficulty-max",
+     "enabled": false
+    },
+    {
+     "identifier": "easy-mode",
+     "enabled": false
+    },
+    {
+     "identifier": "brainless-hype",
+     "enabled": false
+    },
+    {
+     "identifier": "director-favor",
+     "enabled": false
+    },
+    {
+     "identifier": "catgirl",
+     "enabled": false
+    },
+    {
+     "identifier": "flesh-body",
+     "enabled": false
+    },
+    {
+     "identifier": "social-darwinism",
+     "enabled": false
+    },
+    {
+     "identifier": "dark-forest",
+     "enabled": false
+    },
+    {
+     "identifier": "group-shot-offscreen",
+     "enabled": false
+    },
+    {
+     "identifier": "interject-normal",
+     "enabled": false
+    },
+    {
+     "identifier": "interject-wild",
+     "enabled": false
+    },
+    {
+     "identifier": "dialogue-led",
+     "enabled": false
+    },
+    {
+     "identifier": "dice-roll",
+     "enabled": false
+    },
+    {
+     "identifier": "economy-tech",
+     "enabled": false
+    },
+    {
+     "identifier": "quest-tracker",
+     "enabled": false
+    },
+    {
+     "identifier": "choices",
+     "enabled": false
+    },
+    {
+     "identifier": "canon-lite",
+     "enabled": false
+    },
+    {
+     "identifier": "canon-full",
+     "enabled": false
+    },
+    {
+     "identifier": "tongue-lash",
+     "enabled": false
+    },
+    {
+     "identifier": "commentary",
+     "enabled": false
+    },
+    {
+     "identifier": "danmaku",
+     "enabled": false
+    },
+    {
+     "identifier": "map",
+     "enabled": false
+    },
+    {
+     "identifier": "opportunity",
+     "enabled": false
+    }
+   ]
+  }
+ ],
  "prompts": [
   {
    "identifier": "no-resale",
    "name": "贩子死妈（勿开）",
    "system_prompt": false,
    "marker": false,
-   "content": "禁商业二传\ndc发布网址：https://discord.com/channels/1134557553011998840/1552653854078672896\n作者，伟😎\nqq测试群，欢迎进入吹水聊天，新版本抢先在群里发布：458220931",
+   "content": "禁商业二传\ndc发布网址：https://discord.com/channels/1134557553011998840/1552653854078672896\n作者，伟😎\n欢迎进测试群：458220931",
    "role": "system",
    "injection_position": 0,
    "injection_depth": 4,
@@ -31,7 +1140,12 @@
    "injection_position": 0,
    "injection_depth": 4,
    "forbid_overrides": false,
-   "enabled": true
+   "enabled": true,
+   "injection_order": 100,
+   "injection_trigger": [],
+   "attach_role": "user",
+   "attach_index": 1,
+   "attach_side": "end"
   },
   {
    "identifier": "fanfic-director",
@@ -79,7 +1193,12 @@
    "injection_position": 0,
    "injection_depth": 4,
    "forbid_overrides": false,
-   "enabled": true
+   "enabled": true,
+   "injection_order": 100,
+   "injection_trigger": [],
+   "attach_role": "user",
+   "attach_index": 1,
+   "attach_side": "end"
   },
   {
    "identifier": "npc-subjectivity",
@@ -187,7 +1306,12 @@
    "injection_position": 0,
    "injection_depth": 1,
    "forbid_overrides": false,
-   "enabled": true
+   "enabled": true,
+   "injection_order": 100,
+   "injection_trigger": [],
+   "attach_role": "user",
+   "attach_index": 1,
+   "attach_side": "end"
   },
   {
    "identifier": "reply-length-long",
@@ -729,426 +1853,35 @@
    "enabled": false
   }
  ],
- "prompt_order": [
-  {
-   "character_id": 100001,
-   "order": [
-    {
-     "identifier": "no-resale",
-     "enabled": false
-    },
-    {
-     "identifier": "liwe-core",
-     "enabled": true
-    },
-    {
-     "identifier": "fanfic-director",
-     "enabled": false
-    },
-    {
-     "identifier": "human-oath",
-     "enabled": false
-    },
-    {
-     "identifier": "world-logic",
-     "enabled": true
-    },
-    {
-     "identifier": "narrative-frame",
-     "enabled": true
-    },
-    {
-     "identifier": "npc-subjectivity",
-     "enabled": true
-    },
-    {
-     "identifier": "user-echo",
-     "enabled": false
-    },
-    {
-     "identifier": "new-character",
-     "enabled": true
-    },
-    {
-     "identifier": "character-anchor",
-     "enabled": true
-    },
-    {
-     "identifier": "info-boundary",
-     "enabled": true
-    },
-    {
-     "identifier": "constraints",
-     "enabled": true
-    },
-    {
-     "identifier": "jailbreak-guided",
-     "enabled": false
-    },
-    {
-     "identifier": "anti-truncation",
-     "enabled": false
-    },
-    {
-     "identifier": "flow-guide",
-     "enabled": true
-    },
-    {
-     "identifier": "reply-length-long",
-     "enabled": true
-    },
-    {
-     "identifier": "output-format",
-     "enabled": true
-    },
-    {
-     "identifier": "worldInfoBefore",
-     "enabled": true
-    },
-    {
-     "identifier": "worldInfoAfter",
-     "enabled": true
-    },
-    {
-     "identifier": "personaDescription",
-     "enabled": true
-    },
-    {
-     "identifier": "charDescription",
-     "enabled": true
-    },
-    {
-     "identifier": "charPersonality",
-     "enabled": true
-    },
-    {
-     "identifier": "scenario",
-     "enabled": true
-    },
-    {
-     "identifier": "dialogueExamples",
-     "enabled": true
-    },
-    {
-     "identifier": "chatHistory",
-     "enabled": true
-    },
-    {
-     "identifier": "coda-chronicle",
-     "enabled": false
-    },
-    {
-     "identifier": "coda-pantheon",
-     "enabled": false
-    },
-    {
-     "identifier": "coda-diary",
-     "enabled": false
-    },
-    {
-     "identifier": "bilingual-dialogue",
-     "enabled": false
-    },
-    {
-     "identifier": "lang-en",
-     "enabled": false
-    },
-    {
-     "identifier": "nsfw",
-     "enabled": false
-    },
-    {
-     "identifier": "no-nsfw",
-     "enabled": false
-    },
-    {
-     "identifier": "narration-person",
-     "enabled": false
-    },
-    {
-     "identifier": "style-bing-tai-nue-lian",
-     "enabled": false
-    },
-    {
-     "identifier": "style-sha-diao",
-     "enabled": false
-    },
-    {
-     "identifier": "style-char-1st-pov",
-     "enabled": false
-    },
-    {
-     "identifier": "style-lightnovel",
-     "enabled": false
-    },
-    {
-     "identifier": "foreshadowing",
-     "enabled": false
-    },
-    {
-     "identifier": "parallel-world",
-     "enabled": false
-    },
-    {
-     "identifier": "ending-hook",
-     "enabled": false
-    },
-    {
-     "identifier": "slow-pace",
-     "enabled": false
-    },
-    {
-     "identifier": "world-difficulty-max",
-     "enabled": false
-    },
-    {
-     "identifier": "easy-mode",
-     "enabled": false
-    },
-    {
-     "identifier": "brainless-hype",
-     "enabled": false
-    },
-    {
-     "identifier": "director-favor",
-     "enabled": false
-    },
-    {
-     "identifier": "catgirl",
-     "enabled": false
-    },
-    {
-     "identifier": "flesh-body",
-     "enabled": false
-    },
-    {
-     "identifier": "social-darwinism",
-     "enabled": false
-    },
-    {
-     "identifier": "dark-forest",
-     "enabled": false
-    },
-    {
-     "identifier": "group-shot-offscreen",
-     "enabled": false
-    },
-    {
-     "identifier": "interject-normal",
-     "enabled": false
-    },
-    {
-     "identifier": "interject-wild",
-     "enabled": false
-    },
-    {
-     "identifier": "dialogue-led",
-     "enabled": false
-    },
-    {
-     "identifier": "dice-roll",
-     "enabled": false
-    },
-    {
-     "identifier": "economy-tech",
-     "enabled": false
-    },
-    {
-     "identifier": "quest-tracker",
-     "enabled": false
-    },
-    {
-     "identifier": "choices",
-     "enabled": false
-    },
-    {
-     "identifier": "canon-lite",
-     "enabled": false
-    },
-    {
-     "identifier": "canon-full",
-     "enabled": false
-    },
-    {
-     "identifier": "tongue-lash",
-     "enabled": false
-    },
-    {
-     "identifier": "commentary",
-     "enabled": false
-    },
-    {
-     "identifier": "danmaku",
-     "enabled": false
-    },
-    {
-     "identifier": "map",
-     "enabled": false
-    },
-    {
-     "identifier": "opportunity",
-     "enabled": false
-    }
-   ]
-  }
+ "reasoning_effort": "auto",
+ "remove": [
+  "agentSystemPrompt",
+  "agentResults",
+  "6b28024f-37d0-4ce6-bfcb-9d4cfffdc376",
+  "agentTask",
+  "7ad88a7b-5d32-40e9-a464-963b2e77695a",
+  "69c1981c-c3c7-4e77-8744-9be65e83bf4a",
+  "main",
+  "jailbreak",
+  "enhanceDefinitions"
  ],
- "name": "斯德哥尔摩症v2.8",
- "extensions": {
-  "sk_groups": [
-   {
-    "id": "core",
-    "nm": "核心规则",
-    "m": [
-     "✦ Liwe 本体",
-     "✦ 人类基准·誓言",
-     "✦ 世界逻辑",
-     "✦ 叙事总纲"
-    ]
-   },
-   {
-    "id": "char",
-    "nm": "角色 · 场景",
-    "m": [
-     "✷ NPC 主体性",
-     "✷ 新角色入场",
-     "✷ 角色锚",
-     "✷ 信息边界·防全知",
-     "✷ 用户档案",
-     "✷ 角色外貌",
-     "✷ 角色性格",
-     "✷ 场景",
-     "✷ 对话范例"
-    ]
-   },
-   {
-    "id": "flow",
-    "nm": "推演 · 输出",
-    "m": [
-     "✹ 推演流程",
-     "✼ 输出·强制"
-    ]
-   },
-   {
-    "id": "book",
-    "nm": "世界书 · 历史",
-    "m": [
-     "✸ 约束",
-     "✶ 世界书·前",
-     "✶ 世界书·后",
-     "✼ 历史"
-    ]
-   },
-   {
-    "id": "style",
-    "nm": "篇幅 · 文风",
-    "m": [
-     "✹ 篇幅·长",
-     "✹ 双语对白",
-     "✹ 英文输出",
-     "✹ 人称（在此填人称）",
-     "✹ 文风·病态虐恋",
-     "✹ 文风·沙雕",
-     "✹ char第1人称吐槽",
-     "✹ 文风·轻小说",
-     "✹ 对白主导"
-    ]
-   },
-   {
-    "id": "diff",
-    "nm": "难度 · 世界的态度",
-    "m": [
-     "✹ 世界难度·最高",
-     "✹ 简单模式",
-     "✹ 无脑爽",
-     "✹ 导演偏心",
-     "✹ 血肉之躯",
-     "✹ 社会鄙视链"
-    ]
-   },
-   {
-    "id": "tempo",
-    "nm": "节奏 · 结构",
-    "m": [
-     "✹ 伏笔追踪",
-     "✹ 平行世界·离线",
-     "✹ 末尾钩子",
-     "✹ 缓慢节奏",
-     "✹ 群像镜头外",
-     "✹ 抢话·普通",
-     "✹ 抢话·疯狂"
-    ]
-   },
-   {
-    "id": "play",
-    "nm": "可选玩法",
-    "m": [
-     "✹ 用户入镜",
-     "✹ 破甲",
-     "✹ 抗截断·安全尾",
-     "✹ NSFW",
-     "✹ 防乱发情",
-     "✹ 小猫娘",
-     "✹ 骰子",
-     "✹ 经济·科技",
-     "✹ 任务承诺追踪",
-     "✹ 剧情选项",
-     "✹ 拷打"
-    ]
-   },
-   {
-    "id": "fan",
-    "nm": "同人",
-    "m": [
-     "✹ 同人导演",
-     "✹ 同人·简版",
-     "✹ 同人·详细版"
-    ]
-   },
-   {
-    "id": "end",
-    "nm": "终局",
-    "m": [
-     "🎬 终局·编年史",
-     "🎬 终局·众生录",
-     "🎬 终局·回响·日记"
-    ]
-   },
-   {
-    "id": "theater",
-    "nm": "小剧场 · 番外",
-    "m": [
-     "🎭 第四面墙吐槽"
-    ]
-   },
-   {
-    "id": "slot",
-    "nm": "酒馆固定槽位 · 别动",
-    "m": [
-     "贩子死妈（勿开）",
-     "Agent System Prompt",
-     "Agent Results",
-     "Main Prompt",
-     "Post-History Instructions",
-     "Agent Task",
-     "Enhance Definitions"
-    ]
-   },
-   {
-    "id": "gmvl0ehgp",
-    "nm": "可选玩法推荐",
-    "m": [
-     "✹ 黑暗森林",
-     "✹ 神人弹幕",
-     "✹ 地图",
-     "✹ 变数"
-    ]
-   }
-  ],
-  "sk_orb": {
-   "pver": "v2.8"
-  },
-  "tavern_helper": {
-   "script_bindings": {}
-  }
- }
+ "repetition_penalty": 1,
+ "request_image_aspect_ratio": "",
+ "request_image_resolution": "",
+ "request_images": false,
+ "scenario_format": "{{scenario}}",
+ "seed": -1,
+ "send_if_empty": "",
+ "show_thoughts": false,
+ "squash_system_messages": false,
+ "stream_openai": true,
+ "temperature": 1,
+ "tool_call_recurse_limit": 11,
+ "tool_reasoning_mode": "disabled",
+ "top_a": 0,
+ "top_k": 0,
+ "top_p": 0.95,
+ "use_sysprompt": true,
+ "verbosity": "auto",
+ "wi_format": "{0}"
 }
