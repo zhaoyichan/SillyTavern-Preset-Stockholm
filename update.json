@@ -2,10 +2,16 @@
  "_说明": "悬浮球在线更新的索引文件。file 相对仓库根；也可以填完整 http(s) 地址。少写哪条通道，悬浮球里那条就会灰掉。history＝全部历史版本（最新的在最上面），老版本的脚本归档在 archive/ 下，可以直接选它更新（回退）。",
  "_readme_base": "https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
  "preset": {
-  "version": "v2.11",
-  "file": "preset/preset-v2.11.json",
+  "version": "v3",
+  "file": "preset/preset-v3.json",
   "changelog": [
-   "（本次没写说明）"
+   "版本号改成 v3（v2.10 容易被当成 2.1，看着比 v2.9 小）",
+   "★ 完整版（整合件）里现在是两个脚本：斯德哥尔摩·状态球 + 预设管理器 · liwe",
+   "  之前发布台只附带状态球，下载的完整版里没有管理器 —— 已修",
+   "预设管理器升 v0.3：预设名右侧小框可直接切换酒馆预设（弹窗列表）",
+   "  token 改成酒馆同款分词器精算（= 已开启条目的 token，不含聊天记录/世界书/角色信息）",
+   "  世界书在酒馆里关条目 / 取消整本书，脚本 5 秒内自己跟上",
+   "预设本体 = v2.11 的内容（59 条，你 v2.11 的改动都在），只是换了版本号"
   ]
  },
  "script": {
@@ -17,9 +23,32 @@
  },
  "history": [
   {
-   "tag": "v2.11-orb2.8",
+   "tag": "v3-orb2.8",
    "date": "2026-10-27",
    "latest": true,
+   "preset": {
+    "version": "v3",
+    "file": "preset/preset-v3.json"
+   },
+   "script": {
+    "version": "v2.8",
+    "file": "script/orb.js"
+   },
+   "changelog": [
+    "版本号改成 v3（v2.10 容易被当成 2.1，看着比 v2.9 小）",
+    "★ 完整版（整合件）里现在是两个脚本：斯德哥尔摩·状态球 + 预设管理器 · liwe",
+    "  之前发布台只附带状态球，下载的完整版里没有管理器 —— 已修",
+    "预设管理器升 v0.3：预设名右侧小框可直接切换酒馆预设（弹窗列表）",
+    "  token 改成酒馆同款分词器精算（= 已开启条目的 token，不含聊天记录/世界书/角色信息）",
+    "  世界书在酒馆里关条目 / 取消整本书，脚本 5 秒内自己跟上",
+    "预设本体 = v2.11 的内容（59 条，你 v2.11 的改动都在），只是换了版本号"
+   ],
+   "release": "https://github.com/zhaoyichan/SillyTavern-Preset-Stockholm/releases/tag/v3-orb2.8"
+  },
+  {
+   "tag": "v2.11-orb2.8",
+   "date": "2026-10-27",
+   "latest": false,
    "preset": {
     "version": "v2.11",
     "file": "preset/preset-v2.11.json"

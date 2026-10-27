@@ -1140,7 +1140,12 @@ async function pullRemote(force){
   var oldP=JSON.parse(oldF.text);
   var orb=null;
   try{ orb=await ghGetFile("script/orb.js"); }catch(e){}
-  REMOTE={ man:man, oldP:oldP, orbText:orb?orb.text:"", updateText:upF.text };
+  /* ★ 第二个脚本「预设管理器」：单独一个文件，和 orb.js 并列。
+     以前这里只读 orb.js → 发出去的整合件永远只有一个脚本，
+     用户下载后「文件明显变小」、里头的管理器不见了。 */
+  var pm=null;
+  try{ pm=await ghGetFile("script/pm.js"); }catch(e){}
+  REMOTE={ man:man, oldP:oldP, orbText:orb?orb.text:"", pmText:pm?pm.text:"", updateText:upF.text };
   return REMOTE;
 }
 /* 内置脚本外壳兜底：字段和酒馆导出的一模一样，
@@ -1156,6 +1161,21 @@ function DEF_SHELL(){
     data:{},
     export_with:{button:true,data:true},
     info:"作者 Liwe（李伟）。读最新楼层 <state>/<anchor> 显示当前状态；列表式管理预设全部条目（开关/编辑/排序/新增）；支持从 GitHub 拉新版预设。不注入正文、不存长期记忆。"
+  };
+}
+/* 管理器的外壳兜底。★ id 必须和 build_pm.py 里那个固定 id 一模一样：
+   换了 id 等于换了个新脚本，别人更新预设后会叠出两个管理器（球也变两个）。 */
+function DEF_PM_SHELL(){
+  return {
+    name:"预设管理器 \u00b7 liwe",
+    id:"604d4b0f-8cb0-4865-8878-b3e53d5e5b0a",
+    type:"script",
+    content:"",
+    enabled:true,
+    button:{buttons:[],enabled:false},
+    data:{},
+    export_with:{button:true,data:true},
+    info:"预设管理器：三合一（预设条目 / 世界书 / 正则）。作者 Liwe（李伟）。"
   };
 }
 function myScriptVer(){
@@ -1370,15 +1390,41 @@ async function doPublish(){
           if(sc&&sc.content){ oShell=sc; oTH=th; sFrom=pr[1]; }
         }catch(e){}
       });
+      /* 管理器外壳：从旧整合件的第二个脚本里捞（保留它自己的 button/data 等字段），
+         捞不到就用内置兜底。★ 别复制状态球的外壳——两个脚本 id 一样会互相覆盖。 */
+      var oPmShell=null;
+      [[R.oldP,"仓库旧预设"],[P,"你载入的文件"]].forEach(function(pr){
+        if(oPmShell) return;
+        try{
+          var th=pr[0]&&pr[0].extensions&&pr[0].extensions.tavern_helper;
+          var sc=th&&th.scripts&&th.scripts[1];
+          if(sc&&sc.content&&sc.id!=="ca987efe-2f9d-45d8-a464-0b3bedc22836") oPmShell=sc;
+        }catch(e){}
+      });
       var shell;
       if(oShell){ shell=JSON.parse(JSON.stringify(oShell)); }
       else{ shell=DEF_SHELL(); oTH={script_bindings:{},scripts:[]}; sFrom="内置默认外壳"; }
       shell.content=R.orbText;
       var th=JSON.parse(JSON.stringify(oTH||{script_bindings:{},scripts:[]}));
-      th.scripts=[shell];
+      /* ★ 两个脚本一起塞：以前这里写死 th.scripts=[shell]，
+         发出去的整合件永远只有一个脚本 → 用户下载后发现「文件变小、管理器没了」。 */
+      var list=[shell];
+      if(R.pmText){
+        var ps=oPmShell?JSON.parse(JSON.stringify(oPmShell)):DEF_PM_SHELL();
+        ps.content=R.pmText;
+        if(!ps.id) ps.id=DEF_PM_SHELL().id;
+        if(!ps.name) ps.name=DEF_PM_SHELL().name;
+        list.push(ps);
+        var pmv=/VER\s*=\s*"(v[\d.]+)"/.exec(R.pmText);
+        logTo("pubLog","内嵌脚本 "+list.length+" 个：状态球 "+sv+" + 预设管理器 "+(pmv?pmv[1]:"(版本未知)")
+          +"（外壳取自「"+(oPmShell?"旧整合件第二个脚本":"内置默认外壳")+"」）");
+      }else{
+        logTo("pubLog","⚠ 仓库里没读到 script/pm.js → 这次只带状态球一个脚本，管理器不会跟着走");
+      }
+      th.scripts=list;
       P.extensions=P.extensions||{};
       P.extensions.tavern_helper=th;
-      logTo("pubLog","内嵌脚本 "+sv+"（来自仓库当前线上版，外壳取自「"+sFrom+"」）");
+      if(R.pmText) logTo("pubLog","状态球外壳取自「"+sFrom+"」");
     }else{
       var mySc=P.extensions&&P.extensions.tavern_helper
         &&P.extensions.tavern_helper.scripts&&P.extensions.tavern_helper.scripts[0];
@@ -1401,6 +1447,8 @@ async function doPublish(){
     var pRel="preset/preset-"+pv+".json";
     files.push({path:pRel, content:JSON.stringify(repoObj,null,1)});
     if(useScript) files.push({path:"script/orb.js", content:R.orbText});
+    /* 管理器也存一份到仓库：下次发布台/publish.py 才读得到它，不然又只剩状态球 */
+    if(useScript&&R.pmText) files.push({path:"script/pm.js", content:R.pmText});
     if(useScript&&sv&&oldSv&&sv!==oldSv&&R.orbText)
       files.push({path:"archive/orb-"+oldSv+".js", content:R.orbText});
     var bundle=JSON.parse(JSON.stringify(P)); delete bundle.remove;
