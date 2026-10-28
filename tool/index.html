@@ -1233,6 +1233,22 @@ function injectScripts(dst, sources, orbText, pmText){
           shellFrom:shellFrom,
           pmShellFrom:(oPmShell?"旧整合件第二个脚本":"内置默认外壳")};
 }
+/* 酒馆「系统条目」黑名单：这些绝不能进 remove。
+   Main Prompt / Jailbreak / Enhance Definitions / Agent 这些是酒馆自己的全局条目，
+   不在我们的预设里；一旦被当成「要删除的条目」写进 remove，别人更新时
+   悬浮球会按清单删条目 —— 直接把人家的 Main Prompt 删掉。
+   名单和 publish.py 的 SYS_IDS / SYS_NAMES 保持一致。 */
+var SYS_IDS={main:1,jailbreak:1,enhanceDefinitions:1,nsfl:1,
+             agentSystemPrompt:1,agentResults:1,agentTask:1};
+var SYS_NAMES={"Main Prompt":1,"Post-History Instructions":1,"Enhance Definitions":1,
+               "Jailbreak Prompt":1,"NSFW Prompt":1,
+               "Agent System Prompt":1,"Agent Results":1,"Agent Task":1};
+function isSysId(x){
+  if(!x) return false;
+  if(typeof x==="object") x=x.identifier||x.name||"";
+  x=String(x).trim();
+  return !!(SYS_IDS[x]||SYS_NAMES[x]);
+}
 function myScriptVer(){
   if(!P) return "";
   var sc=P.extensions&&P.extensions.tavern_helper
@@ -1459,9 +1475,19 @@ async function doPublish(){
     /* 组装文件 */
     var files=[];
     var repoObj=JSON.parse(JSON.stringify(P));
-    var rm=d.removed.map(function(x){ return x.identifier||x.name; }).filter(Boolean);
-    if(rm.length){ repoObj.remove=rm;
-      logTo("pubLog","这 "+rm.length+" 条写进 remove（别人更新时才会真删）"); }
+    var rm=d.removed.map(function(x){ return x.identifier||x.name; })
+              .filter(Boolean).filter(function(x){ return !isSysId(x); });
+    /* ★ 无条件覆盖 remove：上传文件里自带的那个一律不信。
+       酒馆导出的预设会把 main / jailbreak / agent* 这些系统条目记进 remove，
+       原样发出去，别人更新时会被删掉自己的 Main Prompt（2026-10-28 真出事前拦下）。 */
+    var hadRm=(repoObj.remove&&repoObj.remove.length)||0;
+    if(rm.length){
+      repoObj.remove=rm;
+      logTo("pubLog","这 "+rm.length+" 条写进 remove（别人更新时才会真删）");
+    }else if('remove' in repoObj){
+      delete repoObj.remove;
+      logTo("pubLog","清掉文件自带的 remove（"+hadRm+" 条：系统条目 / 不是这次真删的，一律不发）");
+    }
     /* 主预设存纯的：剥掉内嵌脚本，脚本只存在于 script/orb.js。
        只影响本次发的这一版，仓库里的历史版本保持原样不动。 */
     var st=stripScripts(repoObj);

@@ -1839,17 +1839,6 @@
   }
  ],
  "reasoning_effort": "auto",
- "remove": [
-  "agentSystemPrompt",
-  "agentResults",
-  "6b28024f-37d0-4ce6-bfcb-9d4cfffdc376",
-  "agentTask",
-  "7ad88a7b-5d32-40e9-a464-963b2e77695a",
-  "69c1981c-c3c7-4e77-8744-9be65e83bf4a",
-  "main",
-  "jailbreak",
-  "enhanceDefinitions"
- ],
  "repetition_penalty": 1,
  "request_image_aspect_ratio": "",
  "request_image_resolution": "",
