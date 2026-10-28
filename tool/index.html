@@ -1178,6 +1178,61 @@ function DEF_PM_SHELL(){
     info:"预设管理器：三合一（预设条目 / 世界书 / 正则）。作者 Liwe（李伟）。"
   };
 }
+/* 把「状态球 + 预设管理器」两个脚本注入预设对象。
+   ★ 发布（bPub）和下载整合件（bDl）必须共用这一份：
+     以前只有发布那条路注入，点「下载整合件」拿到的文件里永远没有管理器
+     —— 用户两次反馈「下载的整合版小一截、管理器没了」都是这个坑。
+   参数：
+     dst     要写入的预设对象（就地改）
+     sources 找外壳的来源 [{p:预设, from:"名字"}]，按顺序取第一个带脚本的
+     orbText 状态球代码（必填）
+     pmText  管理器代码（空 = 仓库里没有，就不塞第二个）
+   返回 {n, sv, pmv, shellFrom, pmShellFrom} */
+function injectScripts(dst, sources, orbText, pmText){
+  var src=sources||[], oShell=null, oPmShell=null, oTH=null, shellFrom="";
+  /* 状态球外壳：三级找（仓库旧预设 → 你载入的文件 → 内置默认）。
+     ★ 找到脚本必须连它的 tavern_helper 容器一起带走。 */
+  src.forEach(function(s){
+    if(oShell) return;
+    try{
+      var th=s.p&&s.p.extensions&&s.p.extensions.tavern_helper;
+      var sc=th&&th.scripts&&th.scripts[0];
+      if(sc&&sc.content){ oShell=sc; oTH=th; shellFrom=s.from; }
+    }catch(e){}
+  });
+  /* 管理器外壳：从旧整合件的第二个脚本里捞（保留它自己的 button/data 等字段），
+     捞不到用内置兜底。★ 别复制状态球的外壳——id 一样会互相覆盖。 */
+  src.forEach(function(s){
+    if(oPmShell) return;
+    try{
+      var th=s.p&&s.p.extensions&&s.p.extensions.tavern_helper;
+      var sc=th&&th.scripts&&th.scripts[1];
+      if(sc&&sc.content&&sc.id!=="ca987efe-2f9d-45d8-a464-0b3bedc22836") oPmShell=sc;
+    }catch(e){}
+  });
+  var shell;
+  if(oShell){ shell=JSON.parse(JSON.stringify(oShell)); }
+  else{ shell=DEF_SHELL(); oTH={script_bindings:{},scripts:[]}; shellFrom="内置默认外壳"; }
+  shell.content=orbText;
+  var th=JSON.parse(JSON.stringify(oTH||{script_bindings:{},scripts:[]}));
+  var list=[shell], pmv="";
+  if(pmText){
+    var ps=oPmShell?JSON.parse(JSON.stringify(oPmShell)):DEF_PM_SHELL();
+    ps.content=pmText;
+    if(!ps.id) ps.id=DEF_PM_SHELL().id;
+    if(!ps.name) ps.name=DEF_PM_SHELL().name;
+    list.push(ps);
+    var pm=/VER\s*=\s*"(v[\d.]+)"/.exec(pmText);
+    pmv=pm?pm[1]:"";
+  }
+  th.scripts=list;
+  dst.extensions=dst.extensions||{};
+  dst.extensions.tavern_helper=th;
+  var om=/ORB_VER\s*=\s*"(v[\d.]+)"/.exec(orbText);
+  return {n:list.length, sv:om?om[1]:"", pmv:pmv,
+          shellFrom:shellFrom,
+          pmShellFrom:(oPmShell?"旧整合件第二个脚本":"内置默认外壳")};
+}
 function myScriptVer(){
   if(!P) return "";
   var sc=P.extensions&&P.extensions.tavern_helper
@@ -1374,57 +1429,26 @@ async function doPublish(){
     var useScript=$("ckScript").checked, sv=oldSv;
     if(useScript){
       if(!R.orbText) throw new Error("仓库里没读到 script/orb.js");
+      /* ★ 读不到管理器脚本就停：静默只发一个脚本，用户完全看不出来
+         （2026-10-28 踩过：他发的 v3.1 整合件里只有状态球，帖子都发出去了才发现）。
+         这个错多半是页面还是旧的（浏览器没刷新）→ 提示里直接说清怎么解决。 */
+      if(!R.pmText)
+        throw new Error("仓库里没读到 script/pm.js —— 这样发出去的整合件会没有预设管理器。"
+          +"先把发布台页面整个关掉重开（电脑 Ctrl+F5 强刷）再试；"
+          +"若还不行说明仓库里 script/pm.js 丢了。");
       var m=/ORB_VER\s*=\s*"(v[\d.]+)"/.exec(R.orbText);
       sv=m?m[1]:oldSv;
-      /* 外壳三级找（★2026-10-21）：仓库旧预设 → 你载入的文件 → 内置默认。
-         主预设改成「存纯的」之后，前两级经常都没有脚本，以前这里直接 throw
-         「找不到脚本外壳」把发布卡死。现在最后一级必定成功。
-         ★ 找到脚本必须连它的 tavern_helper 容器一起带走——否则把脚本塞回
-           旧预设那个不存在的容器里会直接崩（publish.py 踩过的 KeyError 同款）。 */
-      var oShell=null, oTH=null, sFrom="";
-      [[R.oldP,"仓库旧预设"],[P,"你载入的文件"]].forEach(function(pr){
-        if(oShell) return;
-        try{
-          var th=pr[0]&&pr[0].extensions&&pr[0].extensions.tavern_helper;
-          var sc=th&&th.scripts&&th.scripts[0];
-          if(sc&&sc.content){ oShell=sc; oTH=th; sFrom=pr[1]; }
-        }catch(e){}
-      });
-      /* 管理器外壳：从旧整合件的第二个脚本里捞（保留它自己的 button/data 等字段），
-         捞不到就用内置兜底。★ 别复制状态球的外壳——两个脚本 id 一样会互相覆盖。 */
-      var oPmShell=null;
-      [[R.oldP,"仓库旧预设"],[P,"你载入的文件"]].forEach(function(pr){
-        if(oPmShell) return;
-        try{
-          var th=pr[0]&&pr[0].extensions&&pr[0].extensions.tavern_helper;
-          var sc=th&&th.scripts&&th.scripts[1];
-          if(sc&&sc.content&&sc.id!=="ca987efe-2f9d-45d8-a464-0b3bedc22836") oPmShell=sc;
-        }catch(e){}
-      });
-      var shell;
-      if(oShell){ shell=JSON.parse(JSON.stringify(oShell)); }
-      else{ shell=DEF_SHELL(); oTH={script_bindings:{},scripts:[]}; sFrom="内置默认外壳"; }
-      shell.content=R.orbText;
-      var th=JSON.parse(JSON.stringify(oTH||{script_bindings:{},scripts:[]}));
-      /* ★ 两个脚本一起塞：以前这里写死 th.scripts=[shell]，
-         发出去的整合件永远只有一个脚本 → 用户下载后发现「文件变小、管理器没了」。 */
-      var list=[shell];
+      /* 外壳三级找 + 两个脚本一起塞，全在 injectScripts 里（下载整合件也调它）。 */
+      var inj=injectScripts(P,[{p:R.oldP,from:"仓库旧预设"},{p:P,from:"你载入的文件"}],
+                             R.orbText,R.pmText);
+      sv=inj.sv||oldSv;
       if(R.pmText){
-        var ps=oPmShell?JSON.parse(JSON.stringify(oPmShell)):DEF_PM_SHELL();
-        ps.content=R.pmText;
-        if(!ps.id) ps.id=DEF_PM_SHELL().id;
-        if(!ps.name) ps.name=DEF_PM_SHELL().name;
-        list.push(ps);
-        var pmv=/VER\s*=\s*"(v[\d.]+)"/.exec(R.pmText);
-        logTo("pubLog","内嵌脚本 "+list.length+" 个：状态球 "+sv+" + 预设管理器 "+(pmv?pmv[1]:"(版本未知)")
-          +"（外壳取自「"+(oPmShell?"旧整合件第二个脚本":"内置默认外壳")+"」）");
+        logTo("pubLog","内嵌脚本 "+inj.n+" 个：状态球 "+sv+" + 预设管理器 "+(inj.pmv||"(版本未知)")
+          +"（外壳取自「"+inj.pmShellFrom+"」）");
+        logTo("pubLog","状态球外壳取自「"+inj.shellFrom+"」");
       }else{
         logTo("pubLog","⚠ 仓库里没读到 script/pm.js → 这次只带状态球一个脚本，管理器不会跟着走");
       }
-      th.scripts=list;
-      P.extensions=P.extensions||{};
-      P.extensions.tavern_helper=th;
-      if(R.pmText) logTo("pubLog","状态球外壳取自「"+sFrom+"」");
     }else{
       var mySc=P.extensions&&P.extensions.tavern_helper
         &&P.extensions.tavern_helper.scripts&&P.extensions.tavern_helper.scripts[0];
@@ -1453,6 +1477,13 @@ async function doPublish(){
       files.push({path:"archive/orb-"+oldSv+".js", content:R.orbText});
     var bundle=JSON.parse(JSON.stringify(P)); delete bundle.remove;
     var enRel="preset/stockholm_preset_"+pv.replace(/^v/,"")+"_with_orb_"+String(sv).replace(/^v/,"")+".json";
+    /* ★ 最后一道自检：真要提交的整合件里必须有 2 个脚本。
+       到这行还没提交任何东西，拦下来是零改动。 */
+    if(useScript){
+      var _ck=((bundle.extensions||{}).tavern_helper||{}).scripts||[];
+      if(_ck.length<2)
+        throw new Error("整合件里只有 "+_ck.length+" 个脚本（该是 2 个：状态球 + 预设管理器）——已中止，什么都没提交");
+    }
     files.push({path:enRel, content:JSON.stringify(bundle,null,1)});
 
     /* update.json */
@@ -1495,17 +1526,43 @@ async function doPublish(){
   }
   btn.disabled=false;
 }
-function doDownload(){
+/* 下载整合件（手机导入用）。
+   ★ 必须自己注入脚本：以前这里直接导出内存里的 P，P 只有在「点过发布」之后
+     才带两个脚本 —— 于是「载入预设 → 直接下载」拿到的整合件里没有管理器
+     （用户反馈的「下载的整合版没有管理器 / 比我给的完整版小一截」就是这个）。
+   ★ 自己 await pullRemote(true) 拿远端：别依赖 doPublish 的局部变量 R。
+   下载前强制刷新一次，保证拿的是仓库里最新的 script/orb.js + script/pm.js。 */
+async function doDownload(){
   if(!P){ toast("先载入预设"); return; }
-  var sv=myScriptVer();
+  logTo("pubLog","准备整合件：读取仓库脚本…");
+  var RR=null;
+  try{ RR=await pullRemote(true); }
+  catch(e){ logTo("pubLog","× 没读到仓库脚本："+e.message+"（按你文件里现有的脚本导出）"); }
+  var sv=myScriptVer(), pmv="";
+  if(RR&&RR.orbText&&$("ckScript").checked){
+    var inj=injectScripts(P,[{p:RR.oldP,from:"仓库旧预设"},{p:P,from:"你载入的文件"}],
+                           RR.orbText,RR.pmText);
+    sv=inj.sv||sv; pmv=inj.pmv;
+    if(RR.pmText)
+      logTo("pubLog","✓ 整合件内嵌 "+inj.n+" 个脚本：状态球 "+sv+" + 预设管理器 "
+        +(pmv||"(版本未知)"));
+    else
+      logTo("pubLog","⚠ 仓库里没有 script/pm.js → 这份只有状态球，管理器没带上","er");
+  }else if(!$("ckScript").checked){
+    logTo("pubLog","（没勾「附带脚本」→ 导出纯预设，不带任何脚本）");
+  }else if(!RR){
+    logTo("pubLog","⚠ 没连上仓库 → 这份按你文件里现有的脚本导出，可能没有管理器","er");
+  }
   var bundle=JSON.parse(JSON.stringify(P)); delete bundle.remove;
   var pv=vparse(P.name)||"";
-  var name="斯德哥尔摩症"+pv+"_含状态球"+(sv||"无脚本")+"_手机导入.json";
+  var name="斯德哥尔摩症"+pv+"_含状态球"+(sv||"无脚本")
+    +(pmv?"和预设管理器"+pmv:"")+"_手机导入.json";
   var blob=new Blob([JSON.stringify(bundle,null,1)],{type:"application/json"});
   var a=document.createElement("a");
   a.href=URL.createObjectURL(blob); a.download=name;
   document.body.appendChild(a); a.click();
   setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1200);
+  logTo("pubLog","✓ 已生成 "+name);
   toast("已生成："+name);
 }
 
