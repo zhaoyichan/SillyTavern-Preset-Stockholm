@@ -12,21 +12,81 @@
      A 预设     列出条目 / 开关 / 就地编辑内容+条目名+角色 / 顶部 token / 开关方案
      B 世界书   整本启停 + 置顶 + 自定义分组；条目三档：禁用 / 关键词 / 常驻
      C 正则     全局 / 局部 / 预设 三组，默认折叠
+     D 消息截图 整条消息存进手机「下载」；相机 / 复制两个图标竖排在气泡右侧
 
-   沿用的老教训（都是真踩过的，别删）：
-     · 只挂在 window 上没用：脚本跑在小 iframe，位置换算要拿 parent window
-     · updatePresetWith('in_use') 只改内存不落盘 → 必须再写一次真实预设名
-     · prompts 只能就地改字段，绝不整体重建（会丢 identifier / injection_*）
-     · 开关要同时写 prompts[i].enabled 和 prompt_order[0].order[j].enabled
-     · 手机浏览器会「自动放大小字」把浮层撑爆 → text-size-adjust:100%
-     · vh / inset:0 量的是地址栏收起时的尺寸 → 一律用 visualViewport 实测
-     · z-index：遮罩不许盖住球；toast 最高
-     · 排队中的延迟写入必须能取消，否则会把外面的新改动盖回去（两边互盖）
+   ★★★ 改这个文件之前，先把下面这块读完 —— 都是真踩过的坑和实测数据，
+        不是说明书。每加一个新功能，把新踩的坑和量出来的数字补到这里。
+
+   ── 版本 / 发版（最容易漏） ──────────────────────────────────────
+   · VER 是版本号的唯一真源。build_pm.py / install_pm.py 都从这儿读，
+     别在任何别的地方再写死版本号（2026-11-04：info 里硬编码 v0.5，升版本漏改过）。
+   · **内容改了就必须升 VER**，不然老用户永远收不到（#26 / #45：
+     同名覆盖只改文件、版本不变 = 别人显示旧版本，白改一次）。
+   · 打包链：manager.js → build_pm.py → _built_pm.js + 导入件 JSON +
+     repo/script/pm.js；装盘 install_pm.py；四处 sha 用 check_sync.py 核。
+   · 仓库两条通道（publish.py / 发布台）改动必须同步做（#27 漏同步炸过）。
+   · 发布前先看 origin/main 与线上 update.json（#20），别拿本地旧版盖掉他自己发的版。
+
+   ── 真机环境关键数据（Android 12 / Chrome 97 WebView，PDKM00） ─────
+   · 那个上下文里 pwin.URL 被覆盖，**createObjectURL 根本不是函数**。
+     所以截图链必须 blob / data 双路：SVG 用 data:image/svg+xml +
+     encodeURIComponent，下载用 FileReader 转 dataURL 塞 a[href]。
+     ★ 别改回只走 blob —— 那是 11-04 真机「下载失败」的真根因。
+   · **a[download] + dataURL 在 TauriTavern 的 WebView 里确实能落进「下载」**
+     （11-04 05:28 他确认图在），不要再换原生下载通道、更不要写酒馆 data 目录。
+   · 图太大会卡死：像素上限 900 万、单边 8000、出图 >10 MB 自动降档重画
+     （11-03 那次 1680×60000 ≈ 1 亿像素直接把手机卡死）。
+   · blob 链接要 60 秒后才撤（8 秒太早，下载器没读完就断）。
+   · 出图日志 + 环境快照（blobCtor / mkURL / fileReader / atob 分项）是排障命根子：
+     **手机才复现的 bug 先让他复制日志，别靠读代码猜根因**（11-04 猜错两次）。
+
+   ── 界面 / 摆位 ──────────────────────────────────────────────────
+   · 层级总表：球 1001 < 面板 1002 < 全屏编辑页 1100 < 遮罩 1200
+              < 弹窗 1201 < toast 1300。改 CSS 前先看这张表（#31）。
+   · 脚本跑在小 iframe：pwin / pdoc 指向 parent；位置一律 visualViewport
+     实测写死坐标，禁用 vh / inset:0 / top:50%（#29 小窗口飘出去）。
+   · 球**默认屏幕正中间**，只有真拖过才写 sk_pm_posuser 并记位置；
+     小窗口下 clamp 会把它钳回可视区（贴边不钳 x 是 11-04「找不到球」的根因）。
+     ★ 别用 transform 居中：active 的 scale 会顶掉它，且 orbPlace 写绝对 left/top。
+   · CSS 初始态与 orbCenter() 必须一致，否则启动第一帧会闪。
+   · 启动链：球先立 → 事件全绑 → 数据最后；数据可重跑，事件用 bootDone 防重绑（#33）。
+   · flex-wrap 按**初始宽度**判定换行：要让位的元素必须 flex:1 1 0，
+     写成 flex:0 1 96px 照样把别人挤到第二行（11-03 顶栏叉钮那次）。
+
+   ── 数据 / 写回 ──────────────────────────────────────────────────
+   · prompts 只能就地改字段，绝不整体重建（identifier / marker /
+     injection_* 会全丢，#12）。开关要同步写 prompt_order[0].order[j].enabled。
+   · 读预设读 in_use；写必须落盘（updatePresetWith 只改内存，#21）。
+   · 新版助手很多读接口返回 Promise：一律 isThen / callAsync 兜底（#30），
+     写接口用 callThen（isThen 返回 boolean，不能 .then）。
+   · prompts 里可能有 undefined 空位：读要跳过、写前必须清（#35）。
+   · 顶部 token = **预设里已开启条目**的 token，不含聊天记录 / 世界书 / 角色；
+     估算值绝不写进 tokCache（#38，9578 vs 7683 的根因）。
+   · 上传文件带进来的字段都不可信：remove 是「执行删除的指令」，
+     必须无条件重算 + isSysId() 黑名单，否则会删掉别人的 Main Prompt（#45）。
+   · 世界书新建用 createWorldbook（严格版），**禁用 createOrReplaceWorldbook**
+     —— 同名会把整本清空。
+   · 搜索必须先归一再还原原文区间（tightMap / findRanges / PUNCT），
+     **绝不退回 indexOf**；摘要一律 snipHTML，别对已带 mark 的串二次高亮（#46）。
+
+   ── 截图外观 ────────────────────────────────────────────────────
+   · bg(day/night) 与 thm(原样/卡片/信纸/夜读) 是**两个独立维度**；
+     .sk-shot-wrap.sk-bg-night 必须排在所有 .sk-thm-* **之后**
+     （同为 (0,2,0) 权重，顺序就是语义，否则黑底配深色字看不清）。
+   · 纯文字兜底图也要跟着 bg 切，不然降级时突然吐一张黑图会像又坏了。
+   · 图标挂进 .mes_text，用 closest('.mes') 找消息；挂 .mes_buttons 会跟
+     酒馆自带按钮重叠。流式输出会重写气泡内容 → 判据要看**真实 DOM 里有没有
+     那两个键**，不能只看「挂过」标记；再加 2.5 秒心跳补扫 + 换聊天重挂监听。
+
+   ── 测试 ────────────────────────────────────────────────────────
+   · 每次改完跑 `node _smoke_manager.js`（失败数必须为 0）与 `node _t_json.js`。
+   · 测试里禁止固定 setTimeout，一律 waitFor；静态断言**先剥注释**再匹配
+     （注释里出现过的函数名 / CSS 串把自己坑过两次）。
    ===================================================================== */
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v0.3";
+var APP = "预设管理器", VER = "v0.6";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -149,6 +209,20 @@ function callAsync(name, args, cb) {
   }
   cb(ret);
   return true;
+}
+/* ── 写类接口也要兜底（新建 / 删除这些会改数据的）──
+   同样是「新版返回 Promise、老版直接返回值」。
+   ⚠ isThen(x) 只是个【判断】，返回 true/false —— 不能写 isThen(x).then(...)，
+     那是把布尔值当 Promise 用，一跑就 TypeError（这次就栽在这儿）。
+   要包一层：是 Promise 就等它落地，不是就直接当成同步结果用。 */
+function callThen(name, args, ok, fail) {
+  var a = call(name);
+  if (!a) { fail && fail(new Error("这台酒馆没有 " + name + " 接口")); return; }
+  var r;
+  try { r = a.run.apply(null, args || []); }
+  catch (e) { fail && fail(e); return; }
+  if (isThen(r)) { r.then(ok, function (e) { fail && fail(e || new Error(name + " 失败了")); }); return; }
+  ok(r);
 }
 /* ── 接口探测 ──
    哪个功能拿不到接口时调用：把「这台酒馆到底有哪些接口」写进
@@ -403,30 +477,91 @@ function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").repla
 function escAttr(s) { return esc(s).replace(/"/g, "&quot;"); }
 function clampNum(n, a, b) { n = Number(n); return !isFinite(n) ? a : Math.max(a, Math.min(n, b)); }
 
-/* ── 搜索三件套 ──
-   ① txtHas：这一串里有没有这个词（两边都小写比；中文没有大小写，照样能对上）
-   ② hlTx ：把命中的字垫一道浅黄。⚠ 必须先切片段再转义 —— 要是先 esc 了再去
-            找词，万一命中落在 "&amp;" 这种转义实体里，标出来的就是一坨乱码
-   ③ snip ：从命中处往回一点点开始截摘要。从头开始截的话，命中在第三段的东
-            西，摘要里根本看不见它命在哪 */
-function txtHas(s, q) { return !q || String(s == null ? "" : s).toLowerCase().indexOf(q) >= 0; }
-function hlTx(s, q) {
+/* ── 搜索：先归一，再按【原文区间】命中 ──
+   为什么不用 indexOf 硬比（真踩过）：
+     你粘进去的一句「北欧人不畏惧死亡…\n因此在对话中谈及死亡时…」，在正文里
+     两行之间是有换行的，搜索框一粘贴换行就没了 → 整串对不上，明明有却"找不到"。
+     标点同理：正文全角「，」，你打的是半角「,」，也判定不命中。
+   所以两边都压成「无空白 + 标点统一 + 小写」的串来比，另外记一张下标表，
+   把命中位置还原回原文区间 {s,e}。还原之后才能精确掐那一刀做替换 ——
+   否则只能整段重排，那会把用户排版弄乱。
+   ① tightMap  ：压平 + 下标表
+   ② findRanges：所有命中区间
+   ③ hlQ       ：按区间垫浅黄。⚠ 必须先切片段再转义，否则命中落在 "&amp;"
+                 这种转义实体里，标出来就是一坨乱码
+   ④ snipHTML  ：以第一处命中为中心截摘要，直接产出带 mark 的 HTML */
+var PUNCT = {
+  "，": ",", "。": ".", "、": ",", "；": ";", "：": ":", "？": "?", "！": "!",
+  "（": "(", "）": ")", "【": "[", "】": "]", "「": '"', "」": '"',
+  "『": '"', "』": '"', "“": '"', "”": '"', "‘": "'", "’": "'",
+  "《": "<", "》": ">", "—": "-", "－": "-", "～": "~", "…": "..."
+};
+function tightMap(s) {
+  s = String(s == null ? "" : s);
+  var out = "", map = [], i, j, c, r, lo;
+  for (i = 0; i < s.length; i++) {
+    c = s.charAt(i);
+    if (/\s/.test(c)) continue;                        /* 空白全部不算 */
+    r = PUNCT[c];
+    if (r) { for (j = 0; j < r.length; j++) { out += r.charAt(j); map.push(i); } }
+    else {
+      lo = c.toLowerCase();
+      /* ⚠ 少数大写字母小写后会变两个字符（İ 之类），那样 map 就错位了 —— 只在长度不变时转 */
+      out += (lo.length === 1 ? lo : c);
+      map.push(i);
+    }
+  }
+  return { t: out, map: map };
+}
+function findRanges(hay, q) {
+  var res = [], H = tightMap(hay), Q = tightMap(q).t, i = 0, k;
+  if (!Q) return res;
+  while ((k = H.t.indexOf(Q, i)) >= 0) {
+    res.push({ s: H.map[k], e: H.map[k + Q.length - 1] + 1 });
+    i = k + Q.length;
+  }
+  return res;
+}
+function txtHas(s, q) { return !q || findRanges(s, q).length > 0; }
+function hlQ(s, q) {
   s = String(s == null ? "" : s);
   if (!q) return esc(s);
-  var low = s.toLowerCase(), out = "", i = 0, k;
-  while ((k = low.indexOf(q, i)) >= 0) {
-    out += esc(s.slice(i, k)) + "<mark>" + esc(s.slice(k, k + q.length)) + "</mark>";
-    i = k + q.length;
+  var rs = findRanges(s, q), out = "", last = 0;
+  if (!rs.length) return esc(s);
+  for (var i = 0; i < rs.length; i++) {
+    out += esc(s.slice(last, rs[i].s)) + "<mark>" + esc(s.slice(rs[i].s, rs[i].e)) + "</mark>";
+    last = rs[i].e;
   }
-  return out + esc(s.slice(i));
+  return out + esc(s.slice(last));
 }
-function snip(s, q, len) {
+function hlTx(s, q) { return hlQ(s, q); }              /* 老名字，别处还在用 */
+function snipHTML(s, q, len) {
+  s = String(s == null ? "" : s);
+  var rs = findRanges(s, q);
+  if (!rs.length) return esc(s.replace(/\s+/g, " ").trim().slice(0, len));
+  var r = rs[0], st = Math.max(0, r.s - 12), en = Math.min(s.length, st + len);
+  var body = s.slice(st, en), inner = hlQ(body, q);
+  /* 命中跨行/跨标点时，正文那一段里「看起来」跟关键词不一样（换行被摘要抹掉了），
+     高亮可能一处都落不到 → 兜底把第一处的开头标上，别让人以为没搜到 */
+  if (inner === esc(body)) {
+    var a = r.s - st;
+    inner = esc(body.slice(0, a)) + "<mark>" + esc(body.slice(a)) + "</mark>";
+  }
+  return (st ? "…" : "") + inner + (en < s.length ? "…" : "");
+}
+function snip(s, q, len) {          /* 纯文本版（不带 mark）：真要高亮请用 snipHTML */
   s = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
-  if (!q) return s.slice(0, len);
-  var k = s.toLowerCase().indexOf(q);
-  if (k < 0) return s.slice(0, len);
-  var st = Math.max(0, k - 10);
+  var rs = findRanges(s, q);
+  if (!rs.length) return s.slice(0, len);
+  var st = Math.max(0, rs[0].s - 10);
   return (st ? "…" : "") + s.slice(st, st + len);
+}
+/* 多行输入框跟着内容长高（搜索框 / 查找框 / 替换框都用它）。
+   ⚠ jsdom 里 scrollHeight 恒为 0，必须给下限，否则高度会被写成 0（踩过） */
+function autogrow(el, max) {
+  if (!el || !el.style) return;
+  el.style.height = "auto";
+  el.style.height = Math.min(Math.max(30, el.scrollHeight || 0), max || 56) + "px";
 }
 
 /* =====================================================================
@@ -632,7 +767,7 @@ var rxBucket = { global: [], character: [], preset: [] };
 var rxOpen = {};       /* global/character/preset → bool */
 var rxHow = "";        /* 正则读的是哪套接口 */
 
-var findQ = "";        /* 搜索词，已经小写化统治好的；空 = 没在搜 */
+var findQ = "";        /* 搜索词，按原样保存（大小写/空白/标点归一在 tightMap 里做）；空 = 没在搜 */
 var findOn = false;    /* 搜索行展没展开 */
 
 function lenOf(it) { return (it.content || "").length; }
@@ -647,7 +782,7 @@ function byId(id) { for (var i = 0; i < items.length; i++) if (items[i].id === i
 var MOCK = [
   ["Main Prompt", "system", "你是 {{char}}。请始终以第一人称扮演这个角色，保持性格一致，不要替 {{user}} 说话。", 1],
   ["世界设定", "system", "这是一个架空的近未来都市，义体改造普及，贫富差距极大。夜晚的霓虹掩盖着无数交易。", 1],
-  ["角色卡补充", "system", "{{char}} 说话带一点懒洋洋的尾音，紧张时会不自觉转打火机。", 1],
+  ["角色卡补充", "system", "{{char}} 说话带一点懒洋洋的尾音，紧张时会不自觉转打火机。\n对陌生人先观察三轮再开口，语气从客气慢慢变松。", 1],
   ["NSFW 允许", "system", "允许成人向描写，不回避暴力与欲望的心理刻画。", 0],
   ["输出格式", "system", "每段回复控制在 3-6 句，用引号表示台词，用括号表示动作与心理。在此基础上适度展开。", 1],
   ["记忆强化", "system", "每隔几轮用一句日常旁白复述当前场景的时间、地点与在场者，避免遗忘。", 0]
@@ -768,6 +903,7 @@ var PH_IDS = { worldInfoBefore: 1, personaDescription: 1, charDescription: 1, ch
                scenario: 1, worldInfoAfter: 1, dialogueExamples: 1, chatHistory: 1 };
 function applyPresetRaw(raw) {
   if (!raw || !raw.prompts) return false;
+  pUndo = null;                       /* 预设换了/重读了，上一份的撤销快照就作废（id 会对不上） */
   /* 预设名：优先问酒馆「现在用的是哪个」（切换后这个名字会变）。
      ⚠ 用 loadedNameFresh（不吃缓存）：loadedName() 在异步接口下会返回 ""，
         于是退回 raw.name —— 那还是切换前那份 in_use 的旧名字。 */
@@ -1485,6 +1621,8 @@ function mount() {
       build: exBuild
     },
     probe: probeDump,
+    /* 搜索匹配的纯函数：跨行 / 标点全半角这些坑全靠它，暴露出来好单独验 */
+    find: { ranges: findRanges, tight: tightMap },
     diag: diagOpen,                                              /* 排查用：直接弹自检卡 */
     diagText: diagBuild,
     /* 我们自己的代码在文档里的行号区间 —— 用来判断一个错是不是我们的。
@@ -1493,7 +1631,24 @@ function mount() {
     bootState: function () {
       return { step: bootStep, fail: bootFail.slice(), ok: bootOK, err: lastErr };
     },
-    reorder: function (seq) { pSort = true; pReorderSeq(seq); }   /* 测试用：直接驱动拖动结果 */
+    reorder: function (seq) { pSort = true; pReorderSeq(seq); },   /* 测试用：直接驱动拖动结果 */
+    /* 悬浮球摆位：测试要能直接驱动「默认归中 / 小窗钳回可视区」，
+       不用重新跑 orbInit（那会重复绑事件）。 */
+    orb: { center: orbCenter, clamp: orbClamp, userPos: orbUserPos },
+    /* 消息截图：测试 / 排查用（cfg 直接可改，apply 手动重挂）
+       ★ 纯函数也暴露出来 —— 卡死那次就是渲染引擎的锅，
+         这些（上限算法 / 清理 / SVG 生成）必须能在 jsdom 里单独验，不能只能靠真机试。 */
+    shot: {
+      cfg: shotCfg, apply: function () { if (pwin && pwin.SillyTavern) shotApply(); },
+      scale: shotScale, clean: shotClean, buildSVG: shotBuildSVG,
+      mesText: shotMesText, who: shotWho, css: SHOT_CSS,
+      inline: function (cl, cb) { shotInline(cl, cb); },
+      /* 上限常量也露出来：测试断言别写死数字，写死了以后调参就是一片红 */
+      maxpx: SHOT_MAXPX, maxside: SHOT_MAXSIDE, maxb: SHOT_MAXB,
+      scan: shotScan, watch: shotWatch, tick: shotTick,
+      logs: shotLogs, logText: shotLogText, log: shotLog, env: shotEnvDump,
+      canURL: shotCanURL, svgSrc: shotSvgSrc, href: shotHref
+    }
   };
 }
 
@@ -1547,7 +1702,10 @@ function CSS() {
 /* ── 悬浮球 1001 ──
    默认【底边居中】：状态球占的是右下角，两个独立脚本别抢同一个位置 */
 .orb{
-  position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom));
+  /* ★ 初始态就在【正中间】。不用 transform 居中：.orb:active 会覆盖 transform，
+     按下那一瞬球会跳回角上；而且启动后 orbCenter() 写死的是绝对 left/top，
+     translate(-50%) 反而会把球推偏。 */
+  position:fixed; left:calc(50% - 22px); top:calc(50% - 22px);
   width:44px;height:44px;border-radius:50%;
   background:linear-gradient(152deg,#fffefb 0%,#fdf7ec 55%,#f6ecd9 100%);
   border:1px solid rgba(168,135,58,.30);
@@ -1581,33 +1739,47 @@ function CSS() {
 }
 .panel.open{opacity:1;transform:none;pointer-events:auto}
 .hd{
-  display:flex;align-items:center;gap:7px;padding:9px 11px;flex:none;
+  display:flex;align-items:center;gap:6px;padding:8px 10px;flex:none;
   border-bottom:1px solid var(--line2); background:var(--hdgrad);
   cursor:move; touch-action:none; position:relative;
+  /* ★ 只作兜底：正常情况一行放得下（算过账，见 .nav 那条），
+     万一屏幕窄到真放不下，换行让导航掉到第一行，总比溢出把图标挤出去强。
+     row-gap 给 5px —— 换行时两行不会散得太开。 */
+  flex-wrap:wrap;row-gap:5px;
 }
 .hd::after{
   content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
   background:linear-gradient(90deg,transparent,rgba(168,135,58,.34),transparent);
 }
-.hd .dot{width:7px;height:7px;border-radius:50%;background:var(--goldgrad);flex:none;box-shadow:0 0 0 3px var(--goldsoft)}
-.hd .nm{font-size:10.5px;color:var(--ink3);flex:0 1 104px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hd .grow{flex:1}
+.hd .dot{width:6px;height:6px;border-radius:50%;background:var(--goldgrad);flex:none;box-shadow:0 0 0 3px var(--goldsoft)}
+/* ★★ 预设名必须写成 flex:1 1 0 —— 这是顶栏能守住一行的关键。
+   上一版写成 flex:0 1 96px 就翻车了：flex-wrap 判定换行用的是【元素的初始宽度】，
+   不是压缩后的宽度。96px 的初始宽让累计到 427.5px ＞ 可用 412px，
+   浏览器不等收缩就直接把最后一个（关闭按钮）甩到第二行 ——
+   他看到的就是「上面一栏、下面孤零零一个叉」。
+   改成 basis 0：换行判定时它占 0，剩余空间再靠 grow 全给它。 */
+.hd .nm{font-size:10.5px;color:var(--ink3);flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 顶栏里这个 grow 不再撑开 —— 剩余空间全留给预设名，
+   否则它俩平分，预设名只剩一半宽、中间还裂一道空。 */
+.hd .grow{flex:0}
 /* ── 预设切换小框 ──
    不用酒馆自己的预设界面，直接在这个脚本里点一下就列出全部预设。
    位置：预设名右边。窄屏时预设名会被藏掉（.hd .nm{display:none}），
    那时按钮自己带上当前预设名，不然就不知道自己在哪个预设里。 */
 /* ★ 纯图标小按钮（用户实测：带名字太长，把关闭按钮挤没了） */
 .psw{
-  flex:none;width:27px;height:27px;padding:0;border-radius:9px;
+  flex:none;width:25px;height:25px;padding:0;border-radius:8px;
   border:1px solid var(--line);background:var(--paper);color:var(--ink3);
   display:flex;align-items:center;justify-content:center;cursor:pointer;
   transition:.18s;box-shadow:var(--shsm);
 }
 .psw:hover{color:#fff;border-color:transparent;background:var(--goldgrad);box-shadow:0 2px 8px var(--ring)}
-.psw svg{width:14px;height:14px}
+.psw svg{width:13px;height:13px}
 /* 预设切换列表：摆在弹窗（.dlg .dm）里。
    弹窗本身宽度 min(320px, 100vw-40px)，列表给它一个内滚区，预设再多也撑不爆屏幕 */
-.dlg .plist{max-height:46vh;overflow-y:auto;overscroll-behavior:contain;margin:0 -4px}
+/* 里面的长清单（预设切换列表 / 自检卡原始信息）：
+   ⚠ 别写 vh —— 同一个坑。兜底值给死，真实值由 dlgFit 按可见区算出来再覆盖。 */
+.dlg .plist{max-height:200px;overflow-y:auto;overscroll-behavior:contain;margin:0 -4px}
 .dlg .pi{
   display:flex;align-items:center;gap:7px;width:100%;text-align:left;
   padding:9px 10px;border-radius:9px;border:0;background:transparent;
@@ -1619,17 +1791,29 @@ function CSS() {
 .dlg .pi .nm2{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dlg .ph{font-size:10px;color:var(--ink3);padding:6px 9px 4px;letter-spacing:.4px}
 .ico{
-  width:27px;height:27px;flex:none;border-radius:9px;border:1px solid var(--line);
+  width:25px;height:25px;flex:none;border-radius:8px;border:1px solid var(--line);
   background:var(--paper);color:var(--ink2);display:flex;align-items:center;justify-content:center;
   cursor:pointer;transition:.18s;box-shadow:var(--shsm);
 }
 .ico:hover,.ico.on{color:#fff;border-color:transparent;background:var(--goldgrad);box-shadow:0 2px 8px var(--ring)}
-.ico svg{width:14px;height:14px}
-/* 三个大页签放在顶上：底下一整条 tab bar 就全省给条目了 */
-.nav{display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--paper3);box-shadow:var(--inssh);flex:none}
+.ico svg{width:13px;height:13px}
+/* ── 页签：五个挤在顶栏一行里 ──
+   ★ 2026-11-03 加到五个（多了「截图」）后挤爆顶栏，我先让导航独占一行 ——
+     他看了一眼就否了：「占地方了，做小一点，挪上去，像之前那样」。
+     于是按像素重算，缩到能塞回一行（面板宽写死 min(432px,100vw-12px)，大屏也只有 432）：
+       可用 = 432 - hd左右padding 20          = 412
+       导航 = 字 115.5(10.5px 字号) + 按钮内距 50 + gap 8 + 外框 4  ≈ 177.5
+       图标 = psw 25 + ico 25×3 = 100
+       其余 = 圆点 6 + 间距 36                 ≈  42
+       固定合计 ≈ 319.5 → 剩 92px 给预设名，够用。
+     ★ 全部靠实测数字，别再凭感觉加 padding —— 加 1px 五个按钮就是 5px。 */
+.nav{flex:0 1 auto;min-width:0;display:flex;gap:2px;padding:2px;
+  border-radius:9px;background:var(--paper3);box-shadow:var(--inssh)}
 .nav button{
-  border:0;background:transparent;color:var(--ink2);padding:4px 11px;font-size:12px;
-  cursor:pointer;font-family:inherit;border-radius:8px;line-height:1.5;transition:.18s;letter-spacing:.2px;
+  flex:0 1 auto;min-width:0;text-align:center;
+  border:0;background:transparent;color:var(--ink2);padding:3px 5px;font-size:10.5px;
+  cursor:pointer;font-family:inherit;border-radius:7px;line-height:1.5;transition:.18s;letter-spacing:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .nav button:hover{color:var(--ink)}
 .nav button.on{
@@ -1664,18 +1848,20 @@ function CSS() {
 @keyframes bump{0%{transform:scale(1)}38%{transform:scale(1.09)}100%{transform:scale(1)}}
 .num.bump{animation:bump .34s cubic-bezier(.34,1.4,.5,1)}
 /* ── 搜索：默认收着，点放大镜才展开（头部那点地方不能白占一行） ── */
-.find{display:none;padding:7px 12px;flex:none;align-items:center;gap:7px;border-bottom:1px solid var(--line2);background:var(--paper2)}
+.find{display:none;padding:7px 12px;flex:none;align-items:flex-end;gap:7px;border-bottom:1px solid var(--line2);background:var(--paper2)}
 .find.on{display:flex}
-.find .fg{width:15px;height:15px;flex:none;color:var(--ink3);display:flex;align-items:center;justify-content:center}
+.find .fg{width:15px;height:15px;flex:none;color:var(--ink3);display:flex;align-items:center;justify-content:center;margin-bottom:7px}
 .find .fg svg{width:15px;height:15px;display:block}
-.find input{
+.find input,.find textarea{
   flex:1;min-width:0;padding:6px 10px;border-radius:9px;border:1px solid var(--line);
   background:var(--paper);color:var(--ink);font:12.5px/1.5 inherit;outline:none;transition:.16s;
+  box-sizing:border-box;
 }
-.find input:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--ring)}
-.find .fn{font-family:var(--mono);font-size:10.5px;color:var(--ink3);flex:none;white-space:nowrap}
+.find textarea{resize:none;overflow-y:auto;min-height:30px;max-height:56px;display:block}
+.find input:focus,.find textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--ring)}
+.find .fn{font-family:var(--mono);font-size:10.5px;color:var(--ink3);flex:none;white-space:nowrap;margin-bottom:7px}
 .find .fx{width:22px;height:22px;flex:none;border-radius:7px;display:flex;align-items:center;justify-content:center;
-  color:var(--ink3);cursor:pointer;transition:.16s}
+  color:var(--ink3);cursor:pointer;transition:.16s;margin-bottom:7px}
 .find .fx svg{width:12px;height:12px;display:block}
 .find .fx:hover{background:var(--goldgrad);color:#fff}
 /* 命中的字：底下垫一道浅黄，比整块反色素净 */
@@ -1730,7 +1916,12 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
 /* 搜索时的「正文摘要」副行：名字没命中、正文命中了才给，告诉你它命在哪 */
 .row.sub{padding:0 13px 8px 13px;margin-top:-7px;border-bottom:1px solid var(--line2);pointer-events:none}
 .row.sub:hover{background:transparent}
-.row.sub .nm{font-size:11px;color:var(--ink3);font-family:var(--mono);line-height:1.55}
+.row.sub .nm{font-size:11px;color:var(--ink3);font-family:var(--mono);line-height:1.55;
+  flex:1;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.row.sub .hits{flex:none;font:10px var(--mono);color:var(--goldD);padding-left:6px}
+/* 「名」标：命中的是条目名而不是正文 —— 不加这个，名字高亮的行会让人以为正文也有了 */
+.row .nm .nmhit{font-style:normal;font-size:9px;color:var(--goldD);border:1px solid var(--line);
+  border-radius:5px;padding:0 3px;margin-left:4px;vertical-align:1px;background:var(--goldsoft)}
 @keyframes rowIn{from{opacity:0;transform:translateY(4px)}}
 .row.in{animation:rowIn .26s ease backwards}
 @keyframes flashRow{0%{background:var(--goldsoft)}100%{background:transparent}}
@@ -1821,6 +2012,12 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
 .wtool{display:flex;align-items:center;gap:6px;padding:8px 13px 9px;flex-wrap:wrap}
 .wtool .grow{flex:1}
 .wtool .lbl{font-size:10.5px;color:var(--ink3);flex:none}
+/* ★ 书内那行现在是「新建条目 + 归入[下拉] + 删除整本」三条挤一排，
+   下拉不自己收缩的话，它一宽就把「删除整本」挤到第二行 —— 他要的是一栏。
+   给它 flex:1 1 0（吃掉剩余）+ min-width（再挤也不塌）+ max-width（别贪太多）。 */
+.wtool select{flex:1 1 0;min-width:52px;max-width:132px;padding:5px 7px;border-radius:9px;
+  border:1px solid var(--line);background:var(--paper);color:var(--ink);font-size:11.5px;
+  font-family:inherit;outline:none;cursor:pointer}
 /* 条目行（世界书 / 正则 共用） */
 .entrow{display:flex;align-items:center;gap:7px;padding:7px 13px;border-bottom:1px solid var(--line2);position:relative}
 .entrow:hover{background:linear-gradient(90deg,rgba(253,248,236,.5),transparent)}
@@ -1864,24 +2061,34 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
    悬浮球 1001 ＜ 面板 1002 ＜ 全屏编辑页 1100 ＜ 遮罩 1200 ＜ 弹窗 1201 ＜ toast 1300
    教训回放：早先把遮罩压在球下面（900 < 1001），结果弹窗一开球被整块盖死；
    这回是弹窗 901 掉到面板 1002 / 编辑页后面 —— 一律按上面这张表排。 */
-.mask{position:fixed;inset:0;background:rgba(24,18,10,.30);
+/* ★ 遮罩 / 弹窗的位置一律由 JS 实测写死（dlgFit），这里只给兜底值。
+   ⚠ 绝不能再回到 inset:0 / top:50% / translate(-50%,-50%) / 100vw / vh ——
+     脚本跑在酒馆助手的小 iframe 里，iframe 的视口跟你在屏幕上看到的那块不是一回事。
+     真机 11-03：小窗口下 top:50% 算的是【iframe 高度的一半】→ 弹窗整个飘到上面去，
+     铺满展开时 iframe 正好等于整屏，所以「展开就没事」。
+     面板（placePanel）和全屏编辑页（sheetFit）早就是实测的，弹窗这里漏了同步。 */
+.mask{position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(24,18,10,.30);
   -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
-  opacity:0;pointer-events:none;transition:.2s;z-index:1200}
+  opacity:0;pointer-events:none;transition:opacity .2s;z-index:1200}
 .mask.on{opacity:1;pointer-events:auto}
 .dlg{
-  position:fixed;left:50%;top:50%;transform:translate(-50%,-46%) scale(.96);z-index:1201;
+  position:fixed;left:0;top:0;transform:scale(.96);transform-origin:center center;z-index:1201;
   width:min(320px,calc(100vw - 40px));background:var(--card);border:1px solid var(--edge);
   box-shadow:0 0 0 1px var(--edge2),var(--sh),inset 0 1px 0 var(--hi);
   border-radius:18px;padding:16px 16px 14px;
-  opacity:0;pointer-events:none;transition:.2s;
+  /* 只给 opacity / transform 做过渡：left/top/width/max-height 是 JS 实测写死的，
+     带上过渡会在键盘弹起重算时看见弹窗慢悠悠滑一下。 */
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+  /* 限高由 dlgFit 按可见区写死；里面的内容超了就自己滚，不许顶出屏幕 */
+  overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
 }
-.dlg.on{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+.dlg.on{opacity:1;transform:scale(1);pointer-events:auto}
 .dlg .dt{font-size:13.5px;font-weight:700;margin-bottom:7px;letter-spacing:.2px}
 .dlg .dm{font-size:12px;color:var(--ink2);line-height:1.7}
 /* 自检卡里的原始信息：等宽、可滚、能整段选中复制 */
 .dlg .dm pre{margin:8px 0 0;padding:9px 10px;white-space:pre-wrap;word-break:break-all;
   font:11px/1.65 var(--mono);color:var(--ink);background:var(--paper3);
-  border:1px solid var(--line);border-radius:10px;max-height:46vh;overflow:auto;
+  border:1px solid var(--line);border-radius:10px;max-height:200px;overflow:auto;
   -webkit-user-select:text;user-select:text;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .dlg .db{display:flex;gap:8px;margin-top:14px}
 .dlg .db .btn{flex:1}
@@ -1891,7 +2098,11 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
    ⚠ 高度绝不用 vh / inset:0 —— 那量的是「地址栏收起时」的尺寸，比此刻可见的大。
       一律由视觉视口实测写死（sheetFit），键盘多高它都贴着键盘上沿。 */
 .sheet{position:fixed;left:0;top:0;width:100%;height:100%;z-index:1100;display:none;
-  flex-direction:column;overflow:hidden;background:var(--paper);
+  flex-direction:column;background:var(--paper);
+  /* 高度是实测写死的（键盘多高它就有多高）。小屏 + 键盘弹起 + 查找条摊开时，
+     固定那几块加起来可能就超了 —— 以前 overflow:hidden 会把底下「名字 / 角色」栏
+     直接裁掉看不见。改成纵向可滚兜底：正文先让，让到头还是不够就整页能滑。 */
+  overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
   border-top:1px solid var(--edge);
   font:14px/1.6 -apple-system,"Segoe UI",system-ui,"PingFang SC","Microsoft YaHei",sans-serif;
   color:var(--ink);-webkit-text-size-adjust:100%;text-size-adjust:100%;
@@ -1913,12 +2124,124 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
 .shd .ok:active{transform:scale(.96)}
 /* 正文区：占掉全部剩余高度，自己滚 —— 名字那一栏永远不被它挤走 */
 .sarea{flex:1;min-height:0;padding:10px 12px 8px;display:flex;flex-direction:column;gap:8px}
-/* 正文框：用户 10-27 反馈太小 → min-height 110 加大到 170（全屏页剩的高度全是它的） */
-.sarea textarea{flex:1;width:100%;min-height:170px;resize:none;outline:none;
+/* 「正文」标签 + 快捷输入挤一行（各占一行的话正文框就被顶下去一截） */
+.sarea .shead{display:flex;align-items:center;gap:7px;flex:none;min-width:0}
+.sarea .shead .slb{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sarea .shead .macros{margin-top:0;flex:none;flex-wrap:nowrap}
+.sarea .shead .macros .chip{padding:4px 9px;font-size:11px}
+/* ── 编辑页里的查找 / 替换条（收起时只有一行，不抢正文的地方） ── */
+/* 内边距跟 .sarea 的 12px 对齐：差 1px 看着就像两块拼上去的 */
+.fbar{flex:none;padding:8px 12px;border-bottom:1px solid var(--line2);background:var(--paper2);
+  display:flex;flex-direction:column;gap:6px}
+.fbar.mini{flex-direction:row;align-items:center;gap:7px;cursor:pointer;padding:8px 12px}
+.fbar.mini .fic{width:14px;height:14px;flex:none;color:var(--ink3);display:flex;align-items:center}
+.fbar.mini .fic svg{width:14px;height:14px;display:block}
+.fbar.mini .ft{font-size:11.5px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fbar.mini .ft b{color:var(--goldD);font-weight:700}
+.fbar.mini .fopen{flex:none;font-size:10.5px;color:var(--goldD);border:1px solid var(--line);
+  border-radius:8px;padding:2px 8px;background:var(--paper)}
+/* ── 查看 / 编辑两态（2026-11-03 定稿）：
+   影子层方案在真机上整体错位（他原话：影把关键字全盖掉了），已弃用。
+   现在：查看态正文是普通文字层，标记是真正的行内 <mark>（跟搜索列表同画法，
+   不存在对不对得上的问题）；点一下正文切成输入框去改。
+   ★★ 两态必须长得一模一样：字体 / 字号 / 行高 / 内边距 / 圆角 / 背景全抄 textarea 的。
+      之前 tview 用 inherit(无衬线 13.5px/1.78)、textarea 用 var(--mono) 13px/1.8，
+      一切换字体就换、行距就变、文字整体挪位 —— 看着像两个不同的框在闪。 ── */
+.tawrap{position:relative;flex:1;min-height:88px;min-width:0;display:flex}
+/* 盒子：两态共用一套，切换时一个像素都不动 */
+.tawrap .tview,.tawrap textarea{
+  flex:1;width:100%;min-height:0;box-sizing:border-box;
+  padding:11px 12px;border:1px solid var(--line);border-radius:12px;
+  background:var(--paper2);color:var(--ink);
+  font:13px/1.8 var(--mono);
+  -webkit-text-size-adjust:100%;text-size-adjust:100%;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  white-space:pre-wrap;word-break:normal;overflow-wrap:break-word;
+  margin:0}
+.tawrap .tview{position:relative;cursor:text}
+.tawrap textarea{resize:none;outline:none;display:block}
+.tawrap textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--ring)}
+/* ★ 普通命中不在这里重写：直接吃全局那条 mark{}，跟搜索列表里的一模一样。
+     之前这里单独写了 .72 的黄（列表里是 .62）—— 两处标色深浅不一样，
+     看着像两个插件各画各的。现在只给「当前这一处」加料。 */
+.tawrap .tview mark.cur{border-radius:3px;outline:1px solid rgba(200,140,40,.4);
+  position:relative;/* mark.cur 要算 offsetTop 来居中滚动，必须有定位 */
+  background:linear-gradient(180deg,rgba(224,150,50,.30) 4%,rgba(223,200,148,.92) 4%)}
+.vhint{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:2;
+  font-size:10.5px;color:var(--goldD);background:var(--paper2);border:1px solid var(--line);
+  border-radius:999px;padding:4px 11px;pointer-events:none;white-space:nowrap;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);opacity:0;visibility:hidden;transition:opacity .3s}
+/* 点进来先露一下，5 秒后自己淡掉 —— 常驻的话正好压在正文最后一行上 */
+.vhint.on{visibility:visible;animation:vhintFade 5s ease forwards}
+@keyframes vhintFade{0%{opacity:0}8%{opacity:1}72%{opacity:1}100%{opacity:0}}
+.fbar .frow{display:flex;align-items:flex-start;gap:6px}
+.fbar .flb{flex:none;width:28px;font-size:10.5px;color:var(--ink3);padding-top:7px}
+.fbar .frow textarea{flex:1;min-width:0;padding:5px 9px;border-radius:8px;border:1px solid var(--line);
+  background:var(--paper);color:var(--ink);font:12px/1.5 inherit;outline:none;resize:none;
+  overflow-y:auto;min-height:30px;max-height:52px;box-sizing:border-box}
+.fbar .frow textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--ring)}
+.fbar .fnav{flex:none;display:flex;align-items:center;gap:2px;padding-top:4px}
+.fbar .fnav b{width:22px;height:24px;display:flex;align-items:center;justify-content:center;
+  border-radius:7px;border:1px solid var(--line);background:var(--paper);color:var(--ink2);
+  font-size:14px;line-height:1;cursor:pointer;font-weight:400}
+.fbar .fnav b:active{background:var(--goldgrad);color:#fff;border-color:transparent}
+.fbar .fnav i{font:10.5px var(--mono);color:var(--ink3);min-width:32px;text-align:center;font-style:normal}
+/* 正文没中、名字里中了：计数那个位置变成「名字 N」，点一下跳到名字框 */
+.fbar .fnav i.nm{color:var(--goldD);cursor:pointer;font-weight:700;text-decoration:underline dotted}
+.fbar .fbtn{display:flex;align-items:center;gap:7px}
+.fbar .chip.off{opacity:.42;pointer-events:none}
+.fbar .chip.undo{opacity:.4;pointer-events:none}
+.fbar .chip.undo.can{opacity:1;pointer-events:auto;color:var(--goldD);border-color:var(--gold)}
+/* 列表底部的「整体替换」条 */
+.bulkbar{display:flex;align-items:center;gap:8px;padding:8px 12px;flex:none;
+  border-top:1px solid var(--line2);background:var(--paper2)}
+.bulkbar .bt{font-size:11px;color:var(--ink3)}
+.bulkbar .bt b{color:var(--goldD);font-family:var(--mono)}
+/* ── 截图设置页（面板第五个页签）──
+   ★ 不另起一套：整体沿用导出页那套 .exwrap / .exlb1 / .exseg / .exb / .exhint，
+     只有「清晰度滑条」是这里独有的，单开一条样式。之前自己造了 .shotbox 一整套，
+     跟别的页签放在一起就是两个世界的样子（他原话：比较生硬）。 */
+/* 清晰度滑条：轨道细、热区高（手机上 4px 的轨道根本按不准） */
+.sld{flex:1;min-width:0;-webkit-appearance:none;appearance:none;width:100%;
+  height:26px;background:transparent;outline:none;margin:0;cursor:pointer}
+.sld::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--line)}
+.sld::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;
+  border-radius:50%;background:var(--goldgrad);border:none;box-shadow:0 1px 5px var(--ring);
+  margin-top:-8px}
+.sld::-moz-range-track{height:4px;border-radius:2px;background:var(--line)}
+.sld::-moz-range-thumb{width:20px;height:20px;border-radius:50%;
+  background:#c9a765;border:none;box-shadow:0 1px 5px var(--ring)}
+.sv{flex:none;min-width:38px;text-align:right;font:11.5px var(--mono);color:var(--goldD);font-weight:700}
+.exrow.sliderow{display:flex;align-items:center;gap:10px}
+.exhint b{color:var(--goldD)}
+/* 整体替换弹窗：两组分类（改哪里 / 改哪些） */
+.bk{display:flex;flex-direction:column;gap:8px}
+.bk .bkr{display:flex;align-items:flex-start;gap:7px}
+.bk .bklb{flex:none;width:40px;font-size:10.5px;color:var(--ink3);padding-top:6px}
+.bk .bkq{flex:1;min-width:0;font-size:12px;color:var(--ink2);padding:5px 9px;border-radius:8px;
+  background:var(--goldsoft);border:1px solid var(--line);max-height:52px;overflow:auto;
+  white-space:pre-wrap;word-break:break-all}
+.bk textarea{flex:1;min-width:0;padding:6px 9px;border-radius:8px;border:1px solid var(--line);
+  background:var(--paper);color:var(--ink);font:12px/1.5 inherit;outline:none;resize:none;
+  min-height:34px;max-height:64px;box-sizing:border-box}
+.bk textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--ring)}
+.bk .seg{display:flex;gap:5px;flex:1;flex-wrap:wrap}
+.bk .seg b{font-size:11.5px;font-weight:400;color:var(--ink2);padding:5px 10px;border-radius:9px;
+  border:1px solid var(--line);background:var(--paper);cursor:pointer;user-select:none}
+.bk .seg b.on{background:var(--goldgrad);color:#fff;border-color:transparent;font-weight:700;
+  box-shadow:0 2px 8px var(--ring)}
+.bk .bktip{font-size:10.5px;color:var(--ink3);line-height:1.7;padding-top:2px}
+.bk .bktip b{color:var(--goldD);font-family:var(--mono)}
+/* 正文框：用户 10-27 反馈太小 → min-height 110 加大到 170（全屏页剩的高度全是它的）
+   ★ 只管「直接挂在 .sarea 下」的那种（世界书 / 正则编辑页）。
+     预设编辑页的正文框包在 .tawrap 里（查看/编辑两态共用的壳）——
+     它的高度由 .tawrap 的 flex 决定，那条 min-height:170px 一旦落到它头上，
+     手机上一开查找条它就把整页撑破、把底下「名字 / 角色」栏挤没。 */
+.sarea>textarea{flex:1;width:100%;min-height:170px;resize:none;outline:none;
   padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--paper2);
   color:var(--ink);font:13px/1.8 var(--mono);-webkit-text-size-adjust:100%}
-.sarea textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--ring)}
-.sarea textarea.half{flex:none;height:96px;min-height:70px}
+.sarea>textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--ring)}
+.sarea>textarea.half{flex:none;height:96px;min-height:70px}
 .slb{font-size:10.5px;color:var(--ink3);letter-spacing:.5px;flex:none}
 /* 底栏：名字 / 角色 / 关键词 / 计数 —— 钉死在键盘上沿 */
 .sft{flex:none;padding:9px 12px calc(9px + env(safe-area-inset-bottom));
@@ -1956,16 +2279,18 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
 .errbar b{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .errbar .x{flex:none;font-size:11px;color:var(--ink3)}
 /* toast 1300 */
+/* toast 1300 —— 位置同样由 JS 实测写死（toastFit），理由同弹窗：
+   bottom:calc(72px+…) 量的是 iframe / 地址栏收起时的视口，小窗口下会飘。 */
 .toast{
-  position:fixed;left:50%;bottom:calc(72px + env(safe-area-inset-bottom));z-index:1300;
-  transform:translateX(-50%) translateY(8px);padding:9px 15px;border-radius:12px;
+  position:fixed;left:0;top:0;z-index:1300;
+  transform:translateY(8px);padding:9px 15px;border-radius:12px;
   background:linear-gradient(135deg,#2f2a22,#221d17);color:#fdf8ee;font-size:12px;
   border:1px solid rgba(223,200,148,.28);box-shadow:0 12px 28px rgba(0,0,0,.28),
     inset 0 1px 0 rgba(255,255,255,.10);
-  opacity:0;pointer-events:none;transition:.24s cubic-bezier(.3,1.2,.5,1);
+  opacity:0;pointer-events:none;transition:opacity .24s cubic-bezier(.3,1.2,.5,1),transform .24s;
   max-width:78vw;text-align:center;letter-spacing:.2px;
 }
-.toast.on{opacity:.97;transform:translateX(-50%)}
+.toast.on{opacity:.97;transform:none}
 /* 珐琅光泽：所有金色实心控件的顶上加一道内高光，整块看着像上过釉 */
 /* ── 预设底部工具行：在条目最底下，「已同步」栏之上 ── */
 .ltools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 13px 12px;border-top:1px dashed var(--line)}
@@ -2029,6 +2354,11 @@ select.exsel{flex:1;padding:9px 11px;border-radius:11px;border:1px solid var(--l
   font-size:13px;border-radius:12px}
 .exgo svg{width:14px;height:14px}
 .exhint{font-size:10.5px;color:var(--ink3);line-height:1.7;margin-top:2px}
+/* 出图记录：截图是异步 + 手机环境杂，报错一闪而过根本抓不住 —— 记在这儿，能翻能复制 */
+.sklog{max-height:132px;overflow:auto;padding:7px 9px;border-radius:10px;border:1px solid var(--line);
+  background:var(--paper);margin-top:2px}
+.sklogrow{font:10.5px/1.6 var(--mono);color:var(--ink2);word-break:break-all;padding:1px 0}
+.sklogrow.dim{color:var(--ink3)}
 textarea.excp{width:100%;min-height:120px;max-height:40vh;margin-top:8px;padding:9px;border-radius:10px;
   border:1px solid var(--line);background:var(--paper);color:var(--ink);font:11px/1.6 var(--mono);resize:vertical}.nav button.on,.tabs button.on,.ico:hover,.ico.on,.btn.go,.chip.cur,
 .row.open-ed .op,.row .op:hover,.row .sw.on,.find .fx:hover{
@@ -2039,8 +2369,25 @@ textarea.excp{width:100%;min-height:120px;max-height:40vh;margin-top:8px;padding
 @media (max-width:430px){
   .stat .num{font-size:20px} .stat .r2{font-size:10.5px} .row .cc{min-width:44px}
   .hd .nm{display:none}                 /* 窄屏优先把「当前预设名」让给按钮 */
+  /* 页签缩小 + 图标缩到 25px 之后，一行固定宽 ≈313.5px；
+     430 屏面板 = 100vw-12 = 418，可用 400 —— 放得下，不用再收。
+     ⚠ 360 以下另有一档（见下），那里才是真挤。 */
+  /* 「正文 · 这条就是要发给 AI 的东西」这行标签在窄屏会被三个快捷输入按钮挤成省略号，
+     反正是装饰说明 —— 窄屏直接让位给按钮 */
+  .sarea .shead .slb{display:none}
+  .sarea .shead{gap:0}
   .entrow{padding-left:11px} .brow{padding-left:11px} .rxrow{padding-left:16px}
   .rxrow .l2{padding-left:39px}
+}
+/* ★ 极窄屏兜底（320~360 这类小手机）：面板只有 100vw-12 ≈ 308，可用 288，
+   而一行固定宽 313.5 —— 差 25px，不收就会溢出把右侧图标挤出去。
+   再收三处：图标 25→22（省 12）、页签内距 5→3（省 20）、顶栏间距 6→4（省 16）
+   → 265.5，留 22px 余量。真还有更窄的，靠 .hd 的 flex-wrap 兜回两行，总比溢出强。 */
+@media (max-width:360px){
+  .hd{gap:4px;padding:7px 8px}
+  .ico,.psw{width:22px;height:22px}
+  .nav button{padding:3px 3px;font-size:10px}
+  .nav{gap:1px}
 }
 ` + "</style>";
 }
@@ -2085,6 +2432,7 @@ function HTML() {
         '<button data-v="world">世界书</button>' +
         '<button data-v="regex">正则</button>' +
         '<button data-v="export">导出</button>' +
+        '<button data-v="shot">截图</button>' +
       '</span>' +
       '<span class="nm" id="pname"></span>'
       +       '<button class="psw" id="pSwap" title="切换酒馆预设">' + SV.swap + '</button>'
@@ -2093,7 +2441,7 @@ function HTML() {
       '<span class="ico" id="pNight" title="夜间 / 日间">' + SV.night + '</span>' +
       '<span class="ico" id="pClose" title="收起">' + SV.close + '</span>' +
     '</div>' +
-    '<div class="stat">' +
+    '<div class="stat" id="statRow">' +
       '<div class="lb" id="lb">实际发给 AI 的量 · 只统计开启的条目</div>' +
       '<div class="num" id="total" title="点一下看这里最占 token 的 3 条">0<u>tok</u></div>' +
       '<span class="r2" id="r2"></span>' +
@@ -2104,7 +2452,8 @@ function HTML() {
     '</div>' +
     '<div class="find" id="find">'
       + '<i class="fg">' + SV.find + '</i>'
-      + '<input id="finp" spellcheck="false" placeholder="搜条目名 / 内容">'
+      /* ⚠ 必须是 textarea：user 要粘整段话去搜，input 会当场把换行吃掉 */
+      + '<textarea id="finp" rows="1" spellcheck="false" wrap="soft" placeholder="搜条目名 / 正文，整段也行"></textarea>'
       + '<span class="fn" id="fnum"></span>'
       + '<span class="fx" id="fclear" title="清空">' + SV.close + '</span>'
       + '</div>' +
@@ -2138,21 +2487,28 @@ function vpRect() {
   } catch (e) {}
   return { w: W.innerWidth || 0, h: W.innerHeight || 0, top: 0, left: 0 };
 }
+/* 用户有没有亲手拖过球 —— 只有拖过才认记忆位置，没拖过一律正中间。
+   抽成函数：启动 / 钳制 / 测试共用一处口径，免得两边判断不一致。 */
+function orbUserPos() { return ls("posuser", "0") === "1"; }
 function orbPlace(el, x, y, edge) {
   el.style.left = x + "px"; el.style.top = y + "px";
   el.style.right = "auto"; el.style.bottom = "auto";
   lsSet("pos", Math.round(x) + "," + Math.round(y));
   if (edge !== undefined) lsSet("edge", edge || "");
 }
-/* 默认位：屏幕底边居中。以前钉在左下角，但手机上够不着 */
-function orbCenterBottom(el) {
+/* ★ 11-04 默认位改成【屏幕正中间】（水平 + 垂直都居中）。
+   他要的是「小窗口状态下也一定找得到」：以前是底边居中 + 左右贴边吸附，
+   球被拖到边上后坐标写进记忆，小窗一缩窄就直接跑到可视区外，整屏都找不着。
+   正中间是任何窗口尺寸下都看得见的位置；之后他自己拖，拖过才记（见 orbInit）。 */
+function orbCenter(el) {
   var R = vpRect();
   if (!R.h) return;
   var w = el.offsetWidth || 44, h = el.offsetHeight || 44;
   if (!w || !h) return;
   var x = Math.round(R.left + R.w / 2 - w / 2);
-  var y = Math.round(R.top + R.h - h - 14);
-  orbPlace(el, Math.max(R.left + 4, x), Math.max(R.top + 4, y), "c");
+  var y = Math.round(R.top + R.h / 2 - h / 2);
+  orbPlace(el, Math.max(R.left + 4, Math.min(x, R.left + R.w - w - 4)),
+               Math.max(R.top + 4, Math.min(y, R.top + R.h - h - 4)), "c");
 }
 /* 把跑出屏幕的球拽回来：键盘弹出、地址栏收放、转屏都会让它跑丢 */
 function orbClamp() {
@@ -2160,29 +2516,26 @@ function orbClamp() {
   var R = vpRect(); if (!R.h) return;
   var w = el.offsetWidth || 44, h = el.offsetHeight || 44;
   var L = parseFloat(el.style.left || ""), T = parseFloat(el.style.top || "");
-  if (!isFinite(L) || !isFinite(T)) {
-    /* 没拖过 → 用 CSS 的默认位。但「bottom」有时按 layout viewport 算，
-       地址栏一露头皮球就被推到屏幕外了 —— 拿真实渲染位置核一遍，出界才摆回来 */
-    if (!el.getBoundingClientRect) return;
-    var rr = el.getBoundingClientRect();
-    if (!rr.width && !rr.height) return;                   /* 还没渲染出来 */
-    var out = rr.top < R.top - 1 || (rr.top + rr.height) > (R.top + R.h + 1)
-           || rr.left < R.left - 1 || (rr.left + rr.width) > (R.left + R.w + 1);
-    if (!out) return;
-    orbPlace(el, Math.max(R.left + 6, Math.min(R.left + R.w - rr.width - 6, rr.left)),
-                 Math.max(R.top + 6, Math.min(R.top + R.h - rr.height - 6, rr.top)), "");
-    return;
-  }
+  var userPos = orbUserPos();
+  /* 还没摆过（比如球刚创建、CSS 默认位）→ 直接按实测视口摆正中间，
+     别再靠 getBoundingClientRect 慢慢核：小窗口下它量到的还是旧 layout viewport。 */
+  if (!isFinite(L) || !isFinite(T)) { orbCenter(el); return; }
   var ed = ls("edge", "");
   var minT = R.top + 6, maxT = R.top + R.h - h - 6; if (maxT < minT) maxT = minT;
-  var nT = Math.max(minT, Math.min(T, maxT)), nL = L;
-  if (ed === "c") {
-    /* 停在中间 → 水平跟着屏幕重新居中（转屏、改窗口大小也不会偏） */
-    nL = Math.max(R.left + 4, Math.round(R.left + R.w / 2 - w / 2));
-  } else if (ed !== "l" && ed !== "r") {                   /* 贴边时故意露一半，只管上下 */
-    var minL = R.left + 6, maxL = R.left + R.w - w - 6; if (maxL < minL) maxL = minL;
-    nL = Math.max(minL, Math.min(L, maxL));
+  var minL = R.left + 6, maxL = R.left + R.w - w - 6; if (maxL < minL) maxL = minL;
+  var nT, nL;
+  if (!userPos) {
+    /* 默认位：小窗 / 转屏 / 键盘顶起，一律重新摆回正中间 */
+    nL = Math.round(R.left + R.w / 2 - w / 2);
+    nT = Math.round(R.top + R.h / 2 - h / 2);
+  } else {
+    /* 用户拖过：位置归他管，但★绝不允许跑出可视区★ ——
+       以前贴边（l/r）故意不钳 x，小窗口一缩窄球就整颗跑没影了。 */
+    nT = T;
+    nL = (ed === "c") ? Math.round(R.left + R.w / 2 - w / 2) : L;
   }
+  nL = Math.max(minL, Math.min(nL, maxL));
+  nT = Math.max(minT, Math.min(nT, maxT));
   if (Math.abs(nT - T) > 1 || Math.abs(nL - L) > 1) orbPlace(el, nL, nT, ed);
 }
 function vpWatch() {
@@ -2194,6 +2547,7 @@ function vpWatch() {
       orbClamp();
       if (sheetIsOn()) sheetFit();          /* 全屏编辑页跟着一起重贴（键盘抬起/转屏） */
       if (panelOpen) { placePanel(); fitHeight(); }
+      if (dlgIsOn()) dlgFit();              /* 弹窗同理：键盘一顶，可见区就变了 */
       }, 130);
     };
     if (vv && vv.addEventListener) { vv.addEventListener("resize", on); vv.addEventListener("scroll", on); }
@@ -2215,7 +2569,8 @@ function placePanel() {
   var maxH = Math.max(220, Math.min(R.h - 24, Math.round(R.h * 0.80)));
   if (h > maxH) h = maxH;
   var x = Math.round(R.left + R.w / 2 - w / 2);
-  /* 略微偏上：给底下居中的球让出位置，免得面板一开就把球吃了 */
+  /* 略微偏上一点点（纯视觉）。球现在默认也在正中央，面板层级更高会盖住它，
+     关掉面板球就露出来 —— 那是正常的，别再为它让位、也别当成「球不见了」。 */
   var y = Math.round(R.top + R.h / 2 - h / 2 - Math.min(30, R.h * 0.04));
   x = Math.max(R.left + 6, Math.min(x, R.left + R.w - w - 6));
   y = Math.max(R.top + 8, Math.min(y, R.top + R.h - h - 8));
@@ -2237,7 +2592,22 @@ var toastH = null;
 function toast(m) {
   var t = QI("toast"); if (!t) return;
   t.textContent = m; t.classList.add("on");
+  toastFit(t);                       /* 先按可见区摆好，再让它显形 */
   clearTimeout(toastH); toastH = setTimeout(function () { t.classList.remove("on"); }, 2400);
+}
+/* toast 摆位：底部居中（球现在在正中央，不必再给它留位置） */
+function toastFit(t) {
+  var R = vpRect(); if (!R.w || !R.h) return;
+  var maxW = Math.max(160, Math.round(R.w * 0.78));
+  t.style.maxWidth = maxW + "px";
+  var w = t.offsetWidth || 200, h = t.offsetHeight || 34;
+  var x = Math.round(R.left + R.w / 2 - w / 2);
+  /* 离底一点，免得贴住系统手势条；可见区被键盘压扁时就别再坚持 72 了 */
+  var bot = Math.min(72, Math.max(10, Math.round(R.h * 0.12)));
+  var y = Math.round(R.top + R.h - h - bot);
+  t.style.left = Math.max(R.left + 6, x) + "px";
+  t.style.top = Math.max(R.top + 6, Math.min(y, R.top + R.h - h - 6)) + "px";
+  t.style.bottom = "auto";
 }
 function setSync(cls, tx) {
   var el = QI("sync"), t = QI("syncTx"); if (!el || !t) return;
@@ -2250,6 +2620,47 @@ function pip(on) {
   if (!on && p) { try { p.remove(); } catch (e) {} }
 }
 var dlgYesCb = null, dlgRiskCb = null;
+
+/* ── 弹窗摆位（2026-11-03 小窗口飘窗修的就是这里）──
+   ★ 规矩跟面板 placePanel / 全屏页 sheetFit 一模一样：**全部按主窗口可见区实测写死**。
+     以前是 CSS 居中（top:50%;translate(-50%,-50%)），而脚本跑在酒馆助手的小 iframe 里 ——
+     那个 50% 是【iframe 高度的一半】，不是屏幕的一半。iframe 一小，弹窗就飘到上面去；
+     铺满展开时 iframe 正好等于整屏，看着就「没事」。
+     同一套雷还有：inset:0 的遮罩只盖住 iframe 那一小块、内容里的 46vh 按 iframe 算。
+     所以三样（遮罩尺寸 / 弹窗坐标 / 内部清单限高）都由这个函数实测写出。 */
+function dlgFit() {
+  var m = QI("mask"), d = QI("dlg"); if (!m || !d) return;
+  var R = vpRect(); if (!R.w || !R.h) return;
+
+  /* 遮罩＝此刻真正看得见的那一块（inset:0 会按 iframe/地址栏收起时的尺寸算，比可见的大） */
+  m.style.left = R.left + "px"; m.style.top = R.top + "px";
+  m.style.width = R.w + "px";   m.style.height = R.h + "px";
+  m.style.right = "auto"; m.style.bottom = "auto";
+
+  var w = Math.min(320, R.w - 32);
+  if (w < 180) w = Math.max(160, R.w - 12);          /* 窄到极致的兜底 */
+  d.style.maxHeight = "";                             /* 先放开量一次真实高度 */
+  var h = d.offsetHeight || 260;
+  var maxH = Math.max(180, Math.min(R.h - 24, Math.round(R.h * 0.86)));
+  if (h > maxH) h = maxH;
+
+  var x = Math.round(R.left + R.w / 2 - w / 2);
+  /* 略微偏上：跟面板一个道理 —— 底下给居中的球 / 键盘让点位置 */
+  var y = Math.round(R.top + R.h / 2 - h / 2 - Math.min(24, R.h * 0.03));
+  x = Math.max(R.left + 6, Math.min(x, R.left + R.w - w - 6));
+  y = Math.max(R.top + 6, Math.min(y, R.top + R.h - h - 6));
+
+  d.style.left = x + "px"; d.style.top = y + "px";
+  d.style.width = w + "px"; d.style.maxHeight = maxH + "px";
+  d.style.right = "auto"; d.style.bottom = "auto";
+  d.style.transformOrigin = "center center";
+
+  /* 里面的长清单：限高也按可见区算（46vh 在 iframe 里同样是骗人的） */
+  var inner = Math.max(90, Math.round(maxH * 0.45));
+  var rs = d.querySelectorAll(".plist, .dm pre");
+  for (var i = 0; i < rs.length; i++) rs[i].style.maxHeight = inner + "px";
+}
+function dlgIsOn() { var d = QI("dlg"); return !!(d && d.classList.contains("on")); }
 function dlgOpen(title, msg, yesTx, cb, riskTx, riskCb) {
   var m = QI("mask"), d = QI("dlg"); if (!m || !d) return;
   QI("dlgT").textContent = title;
@@ -2262,6 +2673,8 @@ function dlgOpen(title, msg, yesTx, cb, riskTx, riskCb) {
   var rb = QI("dlgRisk");
   if (rb) { rb.textContent = riskTx || ""; rb.classList.toggle("on", !!riskCb); }
   dlgYesCb = cb; dlgRiskCb = riskCb || null;
+  /* ★ 先按可见区摆好坐标，再让它显形 —— 顺序反了会看见弹窗先飘一下再归位 */
+  dlgFit();
   m.classList.add("on"); d.classList.add("on");
 }
 function dlgClose() {
@@ -2272,12 +2685,15 @@ function dlgClose() {
 /* =====================================================================
    渲染
    ===================================================================== */
-var MACROS = [["char", "主角"], ["user", "对方"]];   /* 就这两个，多的不放 */
-function macroRow(id) {
+/* ★ 主角={{user}}、对方={{char}} —— 2026-11-03 他纠正的：之前俩标签装反了 */
+var MACROS = [["user", "主角"], ["char", "对方"]];   /* 就这两个，多的不放 */
+function macroRow(id, withCopy) {
   return '<div class="macros">' + MACROS.map(function (m) {
     return '<span class="chip" data-mc="{{' + m[0] + '}}" data-mct="' + id + '">'
       + m[1] + '<u>{{' + m[0] + '}}</u></span>';
-  }).join("") + "</div>";
+  }).join("")
+    + (withCopy ? '<span class="chip" data-pcopy="1" title="整条正文进剪贴板">复制<u>条目内容</u></span>' : "")
+    + "</div>";
 }
 
 /* ── 搜索 ──
@@ -2298,11 +2714,13 @@ function findShow(on) {
   if (findOn && sheetIsOn()) finishEdit();
   var box = QI("find"); if (box) box.classList.toggle("on", findOn);
   var b = QI("pFind"); if (b) b.classList.toggle("on", findOn);
-  if (findOn) { var i = QI("finp"); if (i) { try { i.focus(); } catch (e) {} } }
+  if (findOn) { var i = QI("finp"); if (i) { try { i.focus(); } catch (e) {} autogrow(i, 56); } }
   else findSet("");
 }
 function findSet(v) {
-  var nv = String(v == null ? "" : v).trim().toLowerCase();
+  /* ⚠ 不再 toLowerCase：搜索词要按原样显示给人看（含整段句子）。
+     大小写 / 空白 / 标点全半角这些差异，统一在 tightMap 里抹平。 */
+  var nv = String(v == null ? "" : v).trim();
   if (nv === findQ) return;
   /* ⚠ 换搜索词之前先收口：列表马上要被过滤，正在编辑的那条很可能被滤掉，
      编辑器一消失，刚打的字就随风去了 —— finishEdit 会兜底先写回去 */
@@ -2311,7 +2729,7 @@ function findSet(v) {
   renderList();
 }
 function findClear() {
-  var i = QI("finp"); if (i) i.value = "";
+  var i = QI("finp"); if (i) { i.value = ""; autogrow(i, 56); }
   findSet("");
   if (i) { try { i.focus(); } catch (e) {} }
 }
@@ -2323,11 +2741,14 @@ function renderNav() {
   for (var i = 0; i < bs.length; i++) bs[i].classList.toggle("on", bs[i].getAttribute("data-v") === view);
   var isP = view === "preset";
   QI("tabs").style.display = isP ? "" : "none";
-  QI("pFind").style.display = (view === "regex" || view === "export") ? "none" : "";
+  QI("pFind").style.display = (view === "regex" || view === "export" || view === "shot") ? "none" : "";
+  var statRow = QI("statRow");
+  if (statRow) statRow.style.display = view === "shot" ? "none" : "";
   var pn = QI("pname");
   pn.textContent = isP ? presetName
     : view === "world" ? wbBooks.length + " 本世界书"
     : view === "export" ? "导出 / 备份"
+    : view === "shot" ? "消息截图"
     : rxAll().length + " 条正则";
   pn.title = pn.textContent;
   /* 预设切换小框：只在预设页出现（别的页签切预设没意义） */
@@ -2336,7 +2757,7 @@ function renderNav() {
     sw.style.display = isP ? "" : "none";
     sw.title = "切换酒馆预设（当前：" + presetName + "）";
   }
-  QI("how").textContent = isP ? "" : (view === "export" ? "" : ((view === "world" ? wbHow : rxHow) || ""));
+  QI("how").textContent = isP ? "" : (view === "export" || view === "shot" ? "" : ((view === "world" ? wbHow : rxHow) || ""));
 }
 
 /* ── A 预设 ──
@@ -2344,6 +2765,8 @@ function renderNav() {
    分组视图 = 有分组时按组折叠（跟世界书一个路子）；排序 / 分组模式下每行多出对应的钮 */
 function presetRowHTML(it, m, seq) {
   var L = tokOf(it.content), pct = it.enabled ? Math.round(L / m * 100) : 0;
+  var ch = findQ ? findRanges(it.content, findQ).length : 0;     /* 正文命中处数 */
+  var nh = findQ ? findRanges(it.name, findQ).length : 0;
   var grpName = "";
   for (var gi = 0; gi < pgGroups.length; gi++) {
     if ((pgGroups[gi].members || []).indexOf(it.identifier) >= 0) { grpName = pgGroups[gi].name; break; }
@@ -2361,7 +2784,9 @@ function presetRowHTML(it, m, seq) {
     +   '<span class="sw' + (it.enabled ? " on" : "") + '" data-sw="' + it.id + '"></span>'
     +   '<span class="nm' + (it.ph ? " ph" : "") + '"'
     +     (it.ph ? '' : ' data-ed="' + it.id + '" title="点一下编辑"') + '>'
-    +     hlTx(it.name, findQ) + phTag + "</span>"
+    +     hlQ(it.name, findQ)
+    +     (findQ && !ch && nh ? '<i class="nmhit" title="命中的是条目名，不在正文里">名</i>' : "")
+    +     phTag + "</span>"
     +   (pGrpMode && grpName ? '<span class="gtag">' + esc(grpName) + "</span>" : "")
     +   '<span class="cc">' + fmt(L) + "</span>"
     +   (pSort && it.identifier
@@ -2371,9 +2796,12 @@ function presetRowHTML(it, m, seq) {
     +   '<span class="ratio"><i style="width:' + pct + '%"></i></span>'
     + "</div>";
   if (editingId === it.id) h += '<div class="edmark">正在全屏编辑这条…</div>';
-  /* 名字里没命中但正文里命中了 → 摘要一行告诉你它命在哪，不然满屏同名的行看不出区别 */
-  if (findQ && editingId !== it.id && txtHas(it.content, findQ)) {
-    h += '<div class="row sub"><span class="nm sub">' + hlTx(snip(it.content, findQ, 58), findQ) + '</span></div>';
+  /* 正文里命中了 → 摘要一行告诉你它命在哪（名字命中但正文没有，则只挂个「名」标）。
+     摘要直接由 snipHTML 产出带 mark 的 HTML：整段命中时它自己会兜底标开头，
+     不会出现「说搜到了却一个黄点都看不见」。 */
+  if (findQ && editingId !== it.id && ch) {
+    h += '<div class="row sub"><span class="nm sub">' + snipHTML(it.content, findQ, 58) + "</span>"
+      + '<span class="hits">' + ch + " 处</span></div>";
   }
   return h;
 }
@@ -2381,6 +2809,144 @@ function pgSelCount() {
   var n = 0;
   for (var k in pgSel) if (pgSel[k]) n++;
   return n;
+}
+/* ── 整体替换（跨条目）──
+   两组分类，都是为了「不让他猜」：
+     改哪里 = 正文 / 条目名 / 两样都改     （默认正文 —— 绝大多数情况只改内容）
+     改哪些 = 全部 / 已开启 / 已关闭       （默认已开启 —— 改关闭的条目通常是误操作）
+   每次切分类都当场重算「几条 / 几处」写在按钮上方，切到空组合时按钮直接变灰，
+   不让人点进去才发现是 0。 */
+var bulkW = "body", bulkK = "on";
+var pUndo = null;                    /* { snap:[{id,name,content}], hits, at } */
+
+function bulkStat(q, where, which) {
+  var n = 0, hits = 0;
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!it.identifier) continue;                  /* 酒馆的插入位置，本来就没正文 */
+    if (which === "on" && !it.enabled) continue;
+    if (which === "off" && it.enabled) continue;
+    var c = 0;
+    if (where !== "name") c += findRanges(it.content, q).length;
+    if (where !== "body") c += findRanges(it.name, q).length;
+    if (c) { n++; hits += c; }
+  }
+  return { n: n, hits: hits };
+}
+function pBulkHTML() {
+  if (!findQ) return "";
+  var h = "";
+  if (pUndo) {
+    h += '<div class="bulkbar"><span class="bt">刚才替换了 <b>' + pUndo.hits + "</b> 处</span>"
+      +  '<span class="grow"></span><span class="chip" data-pundo="1">撤销</span></div>';
+  }
+  var st = bulkStat(findQ, "body", "on");
+  /* 一处都不剩了就别再摆个"整体替换"按钮（点了也是 0，纯添乱） */
+  if (st.hits) {
+    h += '<div class="bulkbar"><span class="bt">搜到 <b>' + st.n + "</b> 条 / 共 <b>" + st.hits + "</b> 处"
+      +  "（已开启）</span><span class=\"grow\"></span>"
+      +  '<span class="chip go2" data-pbulk="1">整体替换</span></div>';
+  }
+  return h;
+}
+function pBulkTip() {
+  /* ★ 查找词以弹窗里的输入为准（可以换词），不锁死顶部搜索框那个 */
+  var oldEl = QI("bkOld");
+  var q = oldEl ? oldEl.value : findQ;
+  var st = bulkStat(q, bulkW, bulkK);
+  var tip = QI("bkTip");
+  if (tip) {
+    tip.innerHTML = q
+      ? ("会改 <b>" + st.n + "</b> 条，共 <b>" + st.hits + "</b> 处。"
+        + (st.hits ? "<br>改完 30 秒内可以撤销。" : "<br>这个范围里没有能改的东西。"))
+      : "先在上面写要查找什么。";
+  }
+  var yes = QI("dlgYes");
+  if (yes) { yes.disabled = !st.hits; yes.style.opacity = st.hits ? "" : ".45"; }
+  var sw = QI("segW"), sk = QI("segK"), i;
+  if (sw) for (i = 0; i < sw.children.length; i++)
+    sw.children[i].classList.toggle("on", sw.children[i].getAttribute("data-bw") === bulkW);
+  if (sk) for (i = 0; i < sk.children.length; i++)
+    sk.children[i].classList.toggle("on", sk.children[i].getAttribute("data-bk") === bulkK);
+}
+function pBulkOpen() {
+  if (!findQ) return;
+  bulkW = "body"; bulkK = "on";
+  dlgOpen("整体替换",
+    '<div class="bk">'
+    /* 默认带当前搜索词进来，但就是个能改的框——换一个词，下面的数字立刻重算 */
+    + '<div class="bkr"><span class="bklb">查找</span><textarea id="bkOld" rows="1" spellcheck="false" placeholder="要查找的词 / 句子"></textarea></div>'
+    + '<div class="bkr"><span class="bklb">替换为</span>'
+    +   '<textarea id="bkNew" rows="2" spellcheck="false" placeholder="留空＝把这些字删掉"></textarea></div>'
+    + '<div class="bkr"><span class="bklb">改哪里</span><div class="seg" id="segW">'
+    +   '<b data-bw="body" class="on">正文</b><b data-bw="name">条目名</b><b data-bw="both">两样都改</b>'
+    + "</div></div>"
+    + '<div class="bkr"><span class="bklb">改哪些</span><div class="seg" id="segK">'
+    +   '<b data-bk="all">全部</b><b data-bk="on" class="on">已开启</b><b data-bk="off">已关闭</b>'
+    + "</div></div>"
+    + '<div class="bktip" id="bkTip"></div>'
+    + "</div>",
+    "确认替换", function () { pBulkDo(); });
+  var oldEl = QI("bkOld");
+  if (oldEl) { oldEl.value = findQ; autogrow(oldEl, 64); }
+  pBulkTip();
+  setTimeout(function () {
+    var el = QI("bkNew"); if (!el) return;
+    try { el.focus({ preventScroll: true }); } catch (e) {}
+  }, 60);
+}
+function pBulkDo() {
+  var oldEl = QI("bkOld");
+  var q = oldEl ? oldEl.value : findQ;
+  if (!q) { toast("先写要查找什么"); return; }
+  var el = QI("bkNew"), rep = el ? el.value : "";
+  var snap = [], n = 0, hits = 0, i, j;
+  for (i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!it.identifier) continue;
+    if (bulkK === "on" && !it.enabled) continue;
+    if (bulkK === "off" && it.enabled) continue;
+    var c = 0, nv = it.content, nn = it.name, rs;
+    if (bulkW !== "name") {
+      rs = findRanges(nv, q);
+      if (rs.length) {
+        c += rs.length;
+        for (j = rs.length - 1; j >= 0; j--) nv = nv.slice(0, rs[j].s) + rep + nv.slice(rs[j].e);
+      }
+    }
+    if (bulkW !== "body") {
+      rs = findRanges(nn, q);
+      if (rs.length) {
+        c += rs.length;
+        for (j = rs.length - 1; j >= 0; j--) nn = nn.slice(0, rs[j].s) + rep + nn.slice(rs[j].e);
+      }
+    }
+    if (!c) continue;
+    snap.push({ id: it.id, name: it.name, content: it.content });
+    if (bulkW !== "name") it.content = nv;
+    if (bulkW !== "body") it.name = nn;
+    n++; hits += c;
+  }
+  dlgClose();
+  if (!hits) { toast("这个范围里没有能改的东西"); return; }
+  pUndo = { snap: snap, hits: hits, at: Date.now() };
+  renderList(); updStat(true);
+  save("整体替换 " + hits + " 处（" + n + " 条）");
+  toast("已替换 " + hits + " 处，可以撤销");
+}
+function pUndoDo() {
+  if (!pUndo) return;
+  if (Date.now() - pUndo.at > 30000) {
+    pUndo = null; renderList(); toast("超过 30 秒，撤销不了了"); return;
+  }
+  for (var i = 0; i < pUndo.snap.length; i++) {
+    var s = pUndo.snap[i], it = byId(s.id);
+    if (it) { it.name = s.name; it.content = s.content; }
+  }
+  pUndo = null;
+  renderList(); updStat(true);
+  save("撤销了刚才的整体替换");
+  toast("已撤销");
 }
 function presetToolRow() {
   var h = '<div class="ltools">'
@@ -2463,8 +3029,9 @@ function listPreset() {
       h += presetRowHTML(it, m, shown);
     }
   }
-  if (findQ && !hit) { el.innerHTML = noHitHTML("这个预设里"); findCount(0); return; }
+  if (findQ && !hit) { el.innerHTML = noHitHTML("这个预设里") + pBulkHTML(); findCount(0); return; }
   h += unusedBlockHTML();
+  h += pBulkHTML();
   h += presetToolRow();
   el.innerHTML = h;
   findCount(hit);
@@ -2511,11 +3078,29 @@ function sheetRender() {
 function sheetShow(kind) {
   edWhich = kind;
   var s = sheetEl(); if (!s) return;
+  /* ⚠ 查找条的状态必须在 sheetRender 之前定好，否则渲染出来的还是「收起」那个壳，
+     之后再改状态也不会自己重画（真踩过：点搜索结果进来查找条是收着的）。 */
+  if (kind === "p") {
+    fBar.undo = null;
+    /* 有搜索词 → 摊开并定位；没有（直接从列表点进来）→ 收起，别拿上次的词打扰人。
+       但词本身留着：点一下「查找」还能接着用。 */
+    if (findQ) { fBar.q = findQ; fBar.on = true; } else { fBar.on = false; }
+  }
   sheetRender(); s.classList.add("on"); sheetFit();
   try { pdoc.body.style.overflow = "hidden"; } catch (e) {}   /* 底下那层别跟着一起滑 */
   /* 键盘是异步抬起来的：刚 focus 时拿到的常常还是抬起之前的尺寸，多补几枪 */
   var waits = [30, 90, 240, 520, 900];
   for (var i = 0; i < waits.length; i++) setTimeout(sheetFit, waits[i]);
+  if (kind === "p") {
+    fBoot();
+    /* 查看态（从搜索结果进来）什么都不 focus：标记已经在正文里摆好了，
+       抢焦点 = 手机键盘弹起来盖住要给他看的那段（真踩过）。
+       编辑态且没有命中要定位时，才把光标放进正文。 */
+    if (fMode !== "view" && !(fBar.on && fBar.hits.length)) {
+      focusEditor('[data-edbox="' + edBoxId() + '"]', "textarea");
+    }
+    return;
+  }
   focusEditor('[data-edbox="' + edBoxId() + '"]', kind === "r" ? "input" : "textarea");
 }
 function sheetClose() {
@@ -2549,6 +3134,246 @@ function triButtons(id, cur) {
       + (cur === kv[0] ? ' class="on"' : "") + ">" + kv[1] + "</button>";
   }).join("") + "</span>";
 }
+/* =====================================================================
+   全屏编辑页里的「查找 / 替换」（v0.5 定稿）
+     ① 进来就是「滚到那儿」：带搜索词的先看查看态——正文里每处关键词都标了色
+        （跟搜索列表同一个画法），当前这处深一号；点一下正文切成输入框接着改。
+     ② 不再有「第 N 处」说明条——他原话：「你为什么要在上面标一个第一处什么的」。
+        状态只有两处：mini 收起行的一行小字 + 计数 N/M。
+     ③ 定位不抢焦点：跳过去但不 focus 正文，手机键盘不弹。
+   ===================================================================== */
+var fBar = { on: false, q: "", r: "", hi: 0, hits: [], undo: null };
+var fMode = "edit";              /* "view" 查看态（带标记）| "edit" 编辑态 */
+function fSc() { return QI("sheet"); }
+function fTa() { var s = fSc(); return s ? s.querySelector('[data-ta="' + editingId + '"]') : null; }
+function fQv() { var el = QI("fq"); return el ? el.value : fBar.q; }
+function fRv() { var el = QI("fr"); return el ? el.value : fBar.r; }
+
+function fBarHTML() {
+  if (!fBar.on) {
+    return '<div class="fbar mini" data-fact="open" title="查找 / 替换">'
+      +   '<span class="fic">' + SV.find + "</span>"
+      +   '<span class="ft" id="fminiTx"></span>'
+      +   '<span class="fopen">查找 / 替换</span>'
+      + "</div>";
+  }
+  return '<div class="fbar" id="fbar">'
+    + '<div class="frow"><span class="flb">查找</span>'
+    +   '<textarea id="fq" rows="1" spellcheck="false" placeholder="词、句子或整段"></textarea>'
+    +   '<span class="fnav"><b data-fact="prev" title="上一处">‹</b><i id="fcnt">0/0</i>'
+    +     '<b data-fact="next" title="下一处">›</b></span>'
+    + "</div>"
+    + '<div class="frow"><span class="flb">替换</span>'
+    +   '<textarea id="fr" rows="1" spellcheck="false" placeholder="留空＝把这些字删掉"></textarea>'
+    + "</div>"
+    + '<div class="fbtn">'
+    +   '<span class="chip" data-fact="rep">替换</span>'
+    +   '<span class="chip go2" data-fact="repall">全部替换<b id="bRepAllN"></b></span>'
+    +   '<span class="grow"></span>'
+    +   '<span class="chip undo" data-fact="undo">撤销</span>'
+    +   '<span class="chip" data-fact="close">收起</span>'
+    + "</div>"
+    + "</div>";
+}
+/* 打开编辑页时把状态灌回 DOM。forceMode：手动点「查找 / 替换」摊开时强制 edit，
+   别把查看态硬塞给他（查看态是「从搜索结果进来」的待遇）。 */
+function fBoot(forceMode) {
+  if (!editingId) return;
+  fBar.undo = null;                              /* 换了条目，上一条的撤销不能带过来 */
+  if (findQ) { fBar.q = findQ; fBar.on = true; } /* 从搜索结果进来的，直接摊开 */
+  fMode = forceMode || (fBar.on && findQ ? "view" : "edit");
+  var q = QI("fq"), r = QI("fr");
+  if (q) { q.value = fBar.q || ""; autogrow(q, 52); }
+  if (r) { r.value = fBar.r || ""; autogrow(r, 52); }
+  fRecalc(0, true);      /* 先算好命中，不滚 */
+  fSetMode(fMode);       /* 按模式摆好 tview / ta（view 会自己滚到当前命中） */
+}
+/* 名字里的命中不混进正文计数（两个框，编号混在一起会看不懂）——
+   但得让他知道名字里也命中了：正文 0 处时计数位置变成「名字 N」，点一下跳过去 */
+function fNameHits() {
+  var s = fSc(), nm = s ? s.querySelector('[data-nm="' + editingId + '"]') : null;
+  var v;
+  if (nm) v = nm.value;
+  else if (draft && draft.name !== null && draft.name !== undefined) v = draft.name;
+  else { var it = byId(editingId); v = it ? it.name : ""; }
+  return fBar.q ? findRanges(v, fBar.q).length : 0;
+}
+function fNameGo() {
+  var s = fSc(), nm = s ? s.querySelector('[data-nm="' + editingId + '"]') : null;
+  if (!nm) return;
+  var rs = findRanges(nm.value, fBar.q); if (!rs.length) return;
+  try { nm.scrollIntoView({ block: "center" }); } catch (e0) {}
+  try { nm.focus({ preventScroll: true }); nm.setSelectionRange(rs[0].s, rs[0].e); } catch (e) {}
+  toast("命中在下面的「名字」框里");
+}
+/* 重算命中：计数、mini 一行字、按钮亮灰、标记重画。
+   noScroll＝只刷数字，别动滚动位置（自己打字 / 插宏的时候用） */
+function fRecalc(keep, noScroll) {
+  var ta = fTa(); if (!ta) return;
+  var q = fQv();
+  fBar.q = q;
+  fBar.hits = findRanges(ta.value, q);
+  var n = fBar.hits.length;
+  var c = QI("fcnt"), b2n = QI("bRepAllN");
+  if (b2n) b2n.textContent = n ? " " + n : "";
+  var rb = QI("fbar") ? QI("fbar").querySelectorAll('[data-fact="rep"],[data-fact="repall"]') : [];
+  for (var i = 0; i < rb.length; i++) rb[i].classList.toggle("off", !n);
+  /* mini 那行字把状态一句话说清——不搞「第 N 处 + 整句」那种占地方的 */
+  var mt = QI("fminiTx");
+  if (mt) {
+    if (!q) mt.innerHTML = "查找正文，或替换";
+    else if (n) {
+      var show = q.replace(/\s+/g, " ");
+      mt.innerHTML = "查找 <b>" + esc(show.slice(0, 16)) + (show.length > 16 ? "…" : "")
+        + "</b> · " + n + " 处";
+    } else mt.innerHTML = fNameHits() ? "正文里没有 · 名字里有" : "没找到";
+  }
+  if (!n) {
+    if (c) {
+      var nn = fNameHits();
+      if (q && nn) { c.textContent = "名字 " + nn; c.classList.add("nm"); c.onclick = fNameGo; }
+      else { c.textContent = q ? "0/0" : ""; c.classList.remove("nm"); c.onclick = null; }
+    }
+    if (fMode === "view") paintView(false);
+    return;
+  }
+  fBar.hi = ((keep % n) + n) % n;
+  if (c) { c.textContent = (fBar.hi + 1) + "/" + n; c.classList.remove("nm"); c.onclick = null; }
+  if (fMode === "view") paintView(!noScroll);
+  else if (!noScroll) fShowHit();
+}
+/* 查看态渲染：正文原样摆出来，命中处插真正的 <mark>——跟搜索列表同一个画法。
+   cur＝当前这一处，颜色深一号 */
+function paintView(scrollToCur) {
+  var tv = QI("tview"), ta = fTa(); if (!tv || !ta) return;
+  var v = ta.value, rs = fBar.hits, out = "", last = 0, i;
+  for (i = 0; i < rs.length; i++) {
+    out += esc(v.slice(last, rs[i].s))
+      + '<mark' + (i === fBar.hi ? ' class="cur"' : "") + ">"
+      + esc(v.slice(rs[i].s, rs[i].e)) + "</mark>";
+    last = rs[i].e;
+  }
+  tv.innerHTML = out + esc(v.slice(last));
+  if (scrollToCur) {
+    var m = tv.querySelector("mark.cur");
+    if (m) tv.scrollTop = Math.max(0, m.offsetTop - tv.clientHeight / 2 + m.offsetHeight);
+  }
+}
+/* 查看 / 编辑切换。focus＝切换的同时把键盘叫起来（点正文进来才给，初始化不给） */
+function fSetMode(m, focus) {
+  fMode = m;
+  var tv = QI("tview"), ta = fTa(); if (!tv || !ta) return;
+  var hint = QI("vhint");
+  if (m === "view") {
+    paintView(true);                       /* 进查看态就滚到当前这一处 */
+    tv.style.display = "block"; ta.style.display = "none";
+    if (hint) hint.classList.add("on");
+  } else {
+    var st = tv.scrollTop;                 /* 滚到哪接着从哪编 */
+    tv.style.display = "none"; ta.style.display = "block";
+    if (hint) hint.classList.remove("on");
+    ta.scrollTop = st;
+    if (fBar.hits.length) { try { ta.setSelectionRange(fBar.hits[fBar.hi].s, fBar.hits[fBar.hi].e); } catch (e) {} }
+    if (focus) { try { ta.focus({ preventScroll: true }); } catch (e2) {} }
+  }
+}
+/* 编辑态：只做两件事——选区套住命中 + 滚过去。不加任何「第 N 处」的说明行 */
+function fShowHit() {
+  var ta = fTa(); if (!ta || !fBar.hits.length) return;
+  var h = fBar.hits[fBar.hi], c = QI("fcnt");
+  if (c && !c.classList.contains("nm")) c.textContent = (fBar.hi + 1) + "/" + fBar.hits.length;
+  /* 只设选区、不 focus —— 选区在失焦状态下照样能看见（蓝底），键盘也不弹 */
+  try { ta.setSelectionRange(h.s, h.e); } catch (e) {}
+  /* textarea 不会自己滚到选区，得按行号手算 */
+  var line = ta.value.slice(0, h.s).split("\n").length - 1;
+  var lh = 21;
+  try { lh = parseFloat(pwin.getComputedStyle ? pwin.getComputedStyle(ta).lineHeight : 0) || 21; } catch (e2) {}
+  ta.scrollTop = Math.max(0, line * lh - ta.clientHeight / 2 + lh);
+}
+function fJump(d) {
+  if (!fBar.hits.length) return;
+  fBar.hi = ((fBar.hi + d) % fBar.hits.length + fBar.hits.length) % fBar.hits.length;
+  var c = QI("fcnt");
+  if (c && !c.classList.contains("nm")) c.textContent = (fBar.hi + 1) + "/" + fBar.hits.length;
+  if (fMode === "view") paintView(true);   /* 查看态：深色那块挪到新的一处 */
+  else fShowHit();
+}
+/* 复制条目内容（快捷输入行那颗「复制 · 条目内容」）。
+   手机浏览器对 clipboard API 挑权限（酒馆 iframe 里尤其挑），被拒就退回
+   execCommand 老办法；再不行就明说，别无声无息。 */
+function copyTextTo(v, okMsg) {
+  var done = function () { toast(okMsg); };
+  var fail = function () { toast("复制被浏览器拦了——长按正文自己全选吧"); };
+  function legacy() {
+    try {
+      var h = pdoc.createElement("textarea");
+      h.value = v;
+      h.style.cssText = "position:fixed;opacity:0;left:-999px;top:0";
+      pdoc.body.appendChild(h);
+      h.select();
+      var ok = false;
+      try { ok = pdoc.execCommand("copy"); } catch (e) {}
+      try { h.remove(); } catch (e2) {}
+      ok ? done() : fail();
+    } catch (e3) { fail(); }
+  }
+  try {
+    var nv = pwin && pwin.navigator ? pwin.navigator : navigator;
+    if (nv.clipboard && nv.clipboard.writeText) nv.clipboard.writeText(v).then(done, legacy);
+    else legacy();
+  } catch (e) { legacy(); }
+}
+function pCopyBody() {
+  var ta = fTa(); if (!ta) return;
+  copyTextTo(ta.value, "已复制 " + ta.value.length + " 字");
+}
+/* 改完正文要把 draft / token / 自动保存都接上，不然这一改就丢了 */
+function fPush(v) {
+  if (draft) draft.content = v; else if (editingId) harvestDraft(true);
+  var sc = edScope(editingId);
+  var cnt = sc && sc.querySelector('[data-cnt="' + editingId + '"]');
+  if (cnt) cnt.textContent = fmt(tokOf(v)) + " tok";
+  autoSave();
+}
+function fSnap() {
+  var ta = fTa(), it = byId(editingId); if (!ta || !it) return;
+  fBar.undo = { id: it.id, content: ta.value, name: it.name, at: Date.now() };
+  var u = QI("fbar") ? QI("fbar").querySelector('[data-fact="undo"]') : null;
+  if (u) u.classList.add("can");
+}
+function fReplaceOne() {
+  var ta = fTa(); if (!ta || !fBar.hits.length) return;
+  var h = fBar.hits[fBar.hi], rep = fRv();
+  fSnap();
+  ta.value = ta.value.slice(0, h.s) + rep + ta.value.slice(h.e);
+  fPush(ta.value);
+  /* 换完仍从「当前这处」开始数：它现在已经是下一处了，连点几下就是一个个换 */
+  fRecalc(fBar.hi);
+  toast("替换 1 处");
+}
+function fReplaceAll() {
+  var ta = fTa(); if (!ta || !fBar.hits.length) return;
+  var rep = fRv(), n = fBar.hits.length, i;
+  fSnap();
+  var v = ta.value;
+  for (i = fBar.hits.length - 1; i >= 0; i--) v = v.slice(0, fBar.hits[i].s) + rep + v.slice(fBar.hits[i].e);
+  ta.value = v;
+  fPush(v);
+  fRecalc(0);
+  toast("本条替换 " + n + " 处");
+}
+function fUndoDo() {
+  var u = fBar.undo;
+  if (!u) { toast("没有可以撤销的改动"); return; }
+  var ta = fTa();
+  if (ta) { ta.value = u.content; fPush(u.content); }
+  var it = byId(u.id); if (it && u.name !== undefined) it.name = u.name;
+  fBar.undo = null;
+  var b = QI("fbar") ? QI("fbar").querySelector('[data-fact="undo"]') : null;
+  if (b) b.classList.remove("can");
+  fRecalc(0);
+  toast("已撤销");
+}
 function sheetPreset() {
   var it = byId(editingId); if (!it) return "";
   var nm = draft && draft.name !== null ? draft.name : it.name;
@@ -2556,10 +3381,20 @@ function sheetPreset() {
   var rl = draft && draft.role ? draft.role : it.role;
   return '<div data-edbox="' + it.id + '">'
     + sheetHead(nm || "（没名字的条目）")
+    + fBarHTML()
     + '<div class="sarea">'
-    +   '<span class="slb">正文 · 这条就是要发给 AI 的东西</span>'
-    +   '<textarea data-ta="' + it.id + '" spellcheck="false" placeholder="写点什么…">' + esc(ct) + "</textarea>"
-    +   '<div class="smeta">' + macroRow(it.id) + '<span class="grow"></span>'
+    /* 标签和快捷输入挤在同一行：之前各占一行，正文框就被顶下去一截 */
+    +   '<div class="shead">'
+    +     '<span class="slb">正文 · 这条就是要发给 AI 的东西</span>'
+    +     '<span class="grow"></span>'
+    +     macroRow(it.id, true)
+    +   "</div>"
+    +   '<div class="tawrap">'
+    +     '<div class="tview" id="tview"></div>'
+    +     '<textarea data-ta="' + it.id + '" spellcheck="false" placeholder="写点什么…">' + esc(ct) + "</textarea>"
+    +     '<span class="vhint" id="vhint">点一下正文，开始编辑</span>'
+    +   "</div>"
+    +   '<div class="smeta"><span>停手一秒自动存</span><span class="grow"></span>'
     +     '<span class="stok" data-cnt="' + it.id + '">' + fmt(tokOf(ct)) + " tok</span>"
     +   "</div>"
     + "</div>"
@@ -2639,6 +3474,16 @@ var wbBook = null;    /* 正看着的这本书；null = 一级分类列表 */
 var wIdx = [];
 function wbEid(b, e) { wIdx.push([b.name, e.uid]); return "w" + (wIdx.length - 1); }
 function wByEid(id) { var i = parseInt(String(id).slice(1), 10); return wIdx[i] || null; }
+/* 反查：手里只有「书名 + uid」，要拿到编辑页用的 wN。
+   ★ 新建条目必须靠它 —— 新条目的 uid 是酒馆给的，而且是重读完才知道排在哪儿，
+     wIdx 又按渲染顺序发号，所以只能等重画之后再来查。 */
+function wbEidFind(bn, uid) {
+  for (var i = 0; i < wIdx.length; i++) {
+    var w = wIdx[i];
+    if (w && w[0] === bn && String(w[1]) === String(uid)) return "w" + i;
+  }
+  return null;
+}
 function wbCatKey(b) { return b.scope === "chat" ? "chat" : (b.scope === "character" ? "character" : "global"); }
 function wbCatBooks(k) {
   return wbBooks.filter(function (b) { return k === "on" ? b.whole === true : wbCatKey(b) === k; });
@@ -2690,10 +3535,10 @@ function wbHitRow(b, e) {
              + (t === kv[0] ? ' class="on"' : "") + ">" + kv[1] + "</button>";
       }).join("") + "</span>"
     + '<span class="tx" data-hit="' + id + '" title="点一下跳进这本书并定位到这条">'
-    +   '<div class="t1"><b class="bk">' + hlTx(b.name, findQ) + '</b><i class="sep"> › </i>'
-    +     hlTx(e.comment || "(无标题)", findQ) + "</div>"
-    +   '<div class="t2">' + (keys ? "<em>" + hlTx(keys, findQ) + "</em> " : "")
-    +     hlTx(snip(e.content, findQ, 46), findQ) + "</div>"
+    +   '<div class="t1"><b class="bk">' + hlQ(b.name, findQ) + '</b><i class="sep"> › </i>'
+    +     hlQ(e.comment || "(无标题)", findQ) + "</div>"
+    +   '<div class="t2">' + (keys ? "<em>" + hlQ(keys, findQ) + "</em> " : "")
+    +     snipHTML(e.content, findQ, 46) + "</div>"
     + "</span>"
     + '<span class="cc">' + fmt(tokOf(e.content)) + "</span>"
     + "</div>";
@@ -2717,7 +3562,8 @@ function locateRow(id) {
 }
 function catView() {
   var h = '<div class="wtool">'
-        + '<span class="chip add" data-grpadd="1">' + SV.plus + '新建分组</span>'
+        + '<span class="chip add" data-wbnew="1" title="建一本空的世界书">' + SV.plus + '新建世界书</span>'
+        + '<span class="chip" data-grpadd="1" title="把已有的书收成一堆">' + SV.grid + '新建分组</span>'
         + '<span class="grow"></span>'
         + "</div>";
   h += WB_CATS.map(function (kv) {
@@ -2813,7 +3659,8 @@ function bookView(el) {
     h += ents.map(function (e) { return entRow(b, e); }).join("");
   }
   h += '<div class="wtool">'
-     + '<span class="lbl">归入分组</span>'
+     + '<span class="chip add" data-wentadd="1" title="在这本书里加一条新条目">' + SV.plus + '新建条目</span>'
+     + '<span class="lbl">归入</span>'
      + '<select data-grpsel="' + escAttr(b.name) + '">' + grpOptions(b.name) + "</select>"
      + '<span class="grow"></span>'
      + '<button class="btn sm" data-bdel="' + escAttr(b.name) + '">删除整本</button>'
@@ -2837,9 +3684,9 @@ function entRow(b, e) {
              + (t === kv[0] ? ' class="on"' : "") + ">" + kv[1] + "</button>";
       }).join("") + "</span>"
     + '<span class="tx" data-wed="' + id + '" title="点一下编辑">'
-    +   '<div class="t1">' + hlTx(lbl, findQ) + "</div>"
-    +   '<div class="t2">' + (keys ? "<em>" + hlTx(keys, findQ) + "</em> " : "")
-    +     hlTx(snip(e.content, findQ, 40), findQ) + "</div>"
+    +   '<div class="t1">' + hlQ(lbl, findQ) + "</div>"
+    +   '<div class="t2">' + (keys ? "<em>" + hlQ(keys, findQ) + "</em> " : "")
+    +     snipHTML(e.content, findQ, 40) + "</div>"
     + "</span>"
     + '<span class="cc">' + fmt(tokOf(e.content)) + "</span>"
     + "</div>"
@@ -3235,7 +4082,9 @@ function flashRow(id) {
   var r = el.querySelector('.row[data-id="' + id + '"]'); if (!r) return;
   r.classList.remove("flash"); void r.offsetWidth; r.classList.add("flash");
 }
-/* 宏：点一下插到光标处，不是追加到末尾 */
+/* 宏：点一下插到光标处，不是追加到末尾。
+   ★ textarea 一旦重新赋值 scrollTop 会被清零——先记下来插完还回去，
+     不然在正文中间插个宏，页面直接甩回最顶上（真踩过） */
 function insertMacro(el) {
   var id = el.getAttribute("data-mct"), txt = el.getAttribute("data-mc");
   var sc = edScope(id); if (!sc) return;
@@ -3244,13 +4093,17 @@ function insertMacro(el) {
   var v = ta.value;
   var s = (ta.selectionStart == null ? v.length : ta.selectionStart);
   var e = (ta.selectionEnd == null ? v.length : ta.selectionEnd);
+  var st = ta.scrollTop;
   ta.value = v.slice(0, s) + txt + v.slice(e);
   var p = s + txt.length;
-  try { ta.focus(); ta.setSelectionRange(p, p); } catch (err) {}
+  try { ta.focus({ preventScroll: true }); ta.setSelectionRange(p, p); } catch (err) {}
+  ta.scrollTop = st;
   var cnt = sc.querySelector('[data-cnt="' + id + '"]') || sc.querySelector('[data-wcnt="' + id + '"]');
   if (cnt) cnt.textContent = fmt(tokOf(ta.value)) + " tok";
   if (draft) draft.content = ta.value;
   if (draftW) draftW.content = ta.value;
+  /* 预设编辑页开着查找条：刷计数 / mini，但别把滚动拽走 */
+  if (edWhich === "p" && editingId === id && fBar.on) fRecalc(fBar.hi, true);
 }
 
 /* =====================================================================
@@ -3316,6 +4169,71 @@ function wbDelete(name) {
 function wbOffbook(name) {
   wbGroups.forEach(function (g) { g.books = (g.books || []).filter(function (n) { return n !== name; }); });
   wbGroupSave();
+}
+/* =====================================================================
+   新建：世界书 / 世界书条目
+     接口都是酒馆助手官方那套（worldbook.d.ts）：
+       createWorldbook(name, entries?)                 → 同名会失败，返回 false
+       createWorldbookEntries(name, entries[], {render}) → 不填的字段酒馆给默认值
+     ⚠ 不用 createOrReplaceWorldbook：同名时它是【替换】，会把已有的书整本清空 ——
+       这不是「新建」该有的行为，误点一下就是数据事故。
+   ===================================================================== */
+/* 一级：新建一本世界书。建完直接进这本书 —— 空书进来正好看见「整本没启用」的提示和开关 */
+function wbNewBook() {
+  var a = call("createWorldbook");
+  if (!a) { toast("这台酒馆的助手没有「新建世界书」接口"); return; }
+  dlgOpen("新建世界书",
+    '<div class="ginnew"><input id="wbnewnm" spellcheck="false" placeholder="给这本世界书起个名"></div>'
+    + '<div class="exhint">建好后是空书，进去再加条目。<br>'
+    + '新书<b>默认没启用</b>，进书后记得把上面那个开关打开。</div>',
+    "创建", function () {
+      /* ★ dlgYes 是「先关弹窗再跑回调」—— 弹窗只是藏起来，节点还在，这时读值没问题 */
+      var el = QI("wbnewnm");
+      var nm = el ? String(el.value || "").trim() : "";
+      if (!nm) { toast("得写个名字"); return; }
+      if (wbFind(nm)) { toast("已经有叫「" + nm + "」的世界书了"); return; }
+      callThen("createWorldbook", [nm], function (ok) {
+        if (ok === false) { toast("没建成：已经有同名的世界书"); return; }
+        toast("已新建「" + nm + "」");
+        wbLoad();                                  /* 整份重读，新书才会出现在列表里 */
+        setTimeout(function () { wbOpenBook(nm); }, 150);
+      }, function (e) {
+        ownErr(e);
+        toast("新建失败：" + (e && e.message ? e.message : e));
+      });
+    });
+  setTimeout(function () {
+    var el = QI("wbnewnm");
+    if (el) { try { el.focus({ preventScroll: true }); } catch (e) {} }
+  }, 60);
+}
+/* 书里：新建一条条目。不填的字段酒馆自动给默认值，所以只传标题和空正文就够。
+   ★ 建成后直接把编辑页摊开 —— 跟预设页「新增条目」一个手感，
+     否则只是多一条空白行，还得自己再找它点进去。 */
+function wbAddEntry() {
+  var b = wbFind(wbBook);
+  if (!b) { toast("先选一本书"); return; }
+  if (!call("createWorldbookEntries")) { toast("这台酒馆的助手没有「新建条目」接口"); return; }
+  finishEdit();
+  toast("正在新建…");
+  callThen("createWorldbookEntries",
+    [b.name, [{ name: "新条目", content: "" }], { render: "immediate" }],
+    function (r) {
+      var ne = r && r.new_entries && r.new_entries[0];
+      if (!ne) { toast("没建成：酒馆没把新条目返回来"); return; }
+      wbLoadEntries(b, function () {                 /* 重读这本，新条目才排进来 */
+        renderList();                                /* wIdx 按渲染顺序发号，必须重画后再查 */
+        var id = wbEidFind(b.name, ne.uid);
+        if (!id) { toast("已加一条，在列表里"); return; }
+        edW = id; draftW = null;
+        sheetShow("w");
+        toast("已加一条，直接写字就行");
+      });
+    },
+    function (e) {
+      ownErr(e);
+      toast("新建失败：" + (e && e.message ? e.message : e));
+    });
 }
 /* 世界书条目编辑 */
 function wDraftElems(id) {
@@ -3705,6 +4623,7 @@ function renderList() {
   if (view === "preset") listPreset();
   else if (view === "world") listWorld();
   else if (view === "export") renderExport();
+  else if (view === "shot") renderShot();
   else listRegex();
   /* 有报错就在最顶上补一条（各列表都会 innerHTML 重画，放这儿最省事） */
   try {
@@ -3720,6 +4639,7 @@ function switchView(v) {
   sheetClose();                                        /* 全屏编辑页也不能跨页签挂着 */
   view = v;
   if (v === "regex" && findOn) findShow(false);        /* 正则那页不搜：直接把搜索收掉 */
+  if (v === "shot" && findOn) findShow(false);         /* 截图页也不要搜索框 */
   var list = QI("list"); if (list) list.scrollTop = 0;
   if (v === "world" && !wbBooks.length) wbLoad();
   if (v === "regex" && !rxAll().length) rxLoad();
@@ -3848,6 +4768,739 @@ function closePanel() {
 }
 
 /* =====================================================================
+   消息截图（2026-11-03 他拍板的完整需求）
+     · 每条酒馆消息右下角两个小图标：相机＝整条消息截成图片，方块＝复制文字
+     · 存的位置＝手机「下载」文件夹。★ 绝不在应用目录留副本 —— 他旧版就栽在
+       「明明只该进下载，应用系统目录也堆了一堆图」。所以这版全程内存 blob →
+       浏览器下载管理器，不落临时文件、截完即从内存释放。
+     · 清晰度 / 格式 / HTML 美化在管理器「截图」页签里调，美化当场换装
+       （所见即所得：主题类名挂在每条 .mes 上，html2canvas 克隆时类名跟着走，
+        截下来的就是屏幕上那个样子）
+     · 只在真酒馆里启用（有 SillyTavern 才挂）；预览页 / 测试环境不碰
+   ===================================================================== */
+/* ★ 11-04：底色默认【日间白底】。以前基础配色写死成 #16181d 黑底，
+     他截出来一片黑；现在黑底变成一个可选开关（截图页签「底色」那排）。
+     老用户 localStorage 里没有 bg 字段 → 自然落到 day，正好是他要的默认。 */
+var shotCfg = { on: true, dpi: 3, fmt: "png", thm: "", bg: "day" };
+(function () { var s = lsJSON("shot", null); if (s && typeof s === "object") {
+  if (typeof s.on === "boolean") shotCfg.on = s.on;
+  if (isFinite(+s.dpi)) shotCfg.dpi = Math.min(4, Math.max(1, +s.dpi));
+  if (s.fmt === "jpg" || s.fmt === "png") shotCfg.fmt = s.fmt;
+  if (["", "card", "paper", "night"].indexOf(s.thm) >= 0) shotCfg.thm = s.thm;
+  if (s.bg === "day" || s.bg === "night") shotCfg.bg = s.bg;
+} })();
+function shotSave() { lsSetJSON("shot", shotCfg); }
+/* ── 出图日志（他要「能把报错复制给你 / 以后自己看后台日志」）──
+   ★ 截图是异步 + 手机环境千奇百怪，报错一闪而过根本抓不住。所以每一次出图
+     （成功 / 降级 / 失败）都往 localStorage 里记一行，截图页签底下能翻、能一键
+     复制整段发给我。环形 20 条，不占地方。
+   ⚠ 只记文字（时间 + 事件 + 一句话），绝不记图片本身 —— 图片塞 localStorage 会撑爆。 */
+var SHOT_LOGK = "shotlog", SHOT_LOGN = 20;
+function shotLogs() { var a = lsJSON(SHOT_LOGK, []); return (a && a.push) ? a : []; }
+function shotLog(tag, txt) {
+  try {
+    var a = shotLogs(), d = new Date(), p2 = function (n) { return (n < 10 ? "0" : "") + n; };
+    a.unshift((d.getMonth() + 1) + "-" + d.getDate() + " " + p2(d.getHours()) + ":" + p2(d.getMinutes())
+      + ":" + p2(d.getSeconds()) + "  [" + tag + "] " + String(txt == null ? "" : txt).slice(0, 300));
+    while (a.length > SHOT_LOGN) a.pop();
+    lsSetJSON(SHOT_LOGK, a);
+  } catch (e) {}
+}
+/* 环境快照：他报「下载失败」时我第一件事就是看这个 —— 是 iframe 还是顶层、
+   下载属性在不在、UA 是哪家的 WebView，一眼就能把路分岔找出来。 */
+function shotEnvDump() {
+  var o = { ver: VER };
+  try { o.where = (pwin.top === pwin) ? "顶层" : "iframe 里"; } catch (e0) { o.where = "iframe(cross)"; }
+  try { o.ua = String(pwin.navigator.userAgent || "").slice(0, 150); } catch (e1) {}
+  /* ★ 分开记，别再合成一个 blob:false —— 上次日志里只看到 blob:false，
+     根本分不清是 Blob 没有、还是 createObjectURL 没有，害得多猜一轮。 */
+  try { o.blobCtor = (typeof pwin.Blob === "function"); } catch (e2a) {}
+  try { o.mkURL = shotCanURL(); } catch (e2b) { o.mkURL = "ERR"; }
+  try { o.fileReader = (typeof pwin.FileReader === "function"); } catch (e2c) {}
+  try { o.atob = (typeof pwin.atob === "function"); } catch (e2d) {}
+  o.blob = o.mkURL;                 /* 兼容旧字段名 */
+  try { o.dl = ("download" in pdoc.createElement("a")); } catch (e3) {}
+  try { o.topdl = ("download" in pwin.top.document.createElement("a")); } catch (e4) { o.topdl = "ERR:" + e4.message; }
+  try { o.topbody = !!(pwin.top && pwin.top.document && pwin.top.document.body); } catch (e5) { o.topbody = "ERR:" + e5.message; }
+  o.dpi = shotCfg.dpi; o.fmt = shotCfg.fmt; o.bg = shotCfg.bg; o.thm = shotCfg.thm;
+  return o;
+}
+function shotLogText() {
+  var a = shotLogs();
+  return "【消息截图日志 · 管理器 " + VER + "】\n环境：" + JSON.stringify(shotEnvDump())
+    + "\n记录（最新在最上）：\n" + (a.length ? a.map(function (s) { return "· " + s; }).join("\n") : "（还没有出过图）");
+}
+/* busy：防连点把内存打爆；obsOn：记住 observer 挂在哪一个 #chat 上（换聊天时
+   酒馆会整个换掉 #chat 元素，挂在旧元素上的 observer 就哑了 —— 「图标时有时无」的
+   一个来源就是这个） */
+var shotState = { obs: null, obsOn: null, css: false, t: 0, busy: false };
+var SHOT_SV = {
+  cam: '<svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.4"/></svg>',
+  cp: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>'
+};
+/* 样式注进主文档。主题类挂在每条 .mes 上（不是 html/body）——
+   html2canvas 克隆节点时类名跟着走，克隆文档里的样式表才选得到它们 */
+function shotCSS() {
+  if (shotState.css) return;
+  try {
+    var st = pdoc.createElement("style");
+    st.id = "sk-shot-css";
+    st.textContent =
+      ".mes{position:relative}" +
+      /* ★ 图标挂在消息气泡（.mes_text）里，不是挂在 .mes 上：
+         .mes 的底部还有酒馆自带的 .mes_buttons（编辑 / 删除 / 继续那一排），
+         图标按在 .mes 右下角正好压在它上面 —— 两套按钮叠一起就是「布局混乱」。
+         挂进气泡内部就各在各的层，谁也不挡谁。 */
+      ".mes .mes_text{position:relative}" +
+      /* ★ 竖排（相机在上、复制在下）+ 整组上抬 14px + 靠最右：
+         横排紧贴气泡底边时，手指往下一偏就点到下面酒馆那排「继续 / 下一页生成」，
+         等于点错就触发生成。竖排靠右把两个键拉成一条竖线，再整体抬离底边，
+         跟那排按钮在垂直方向上彻底错开。 */
+      ".sk-shot-ops{position:absolute;right:6px;bottom:14px;display:flex;flex-direction:column;gap:6px;opacity:.5;z-index:14}" +
+      ".sk-shot-ops i{width:27px;height:27px;border-radius:9px;display:flex;align-items:center;justify-content:center;" +
+        "cursor:pointer;background:rgba(22,22,28,.5);transition:opacity .15s,transform .1s}" +
+      ".sk-shot-ops i:hover{opacity:1}" +
+      ".sk-shot-ops i:active{transform:scale(.88)}" +
+      ".sk-shot-ops svg{width:14px;height:14px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}" +
+      /* 卡片 */
+      ".sk-thm-card .mes_text{background:#fdfbf5;color:#3a3226;border-radius:6px;border-left:4px solid #b8944a;" +
+        "padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.35)}" +
+      ".sk-thm-card .mes_text b{color:#8a6420}.sk-thm-card .mes_text i{color:#7a4f8a}" +
+      /* 信纸 */
+      ".sk-thm-paper .mes_text{background:#f7f2e7;color:#41392c;border:none;border-radius:2px;" +
+        "border-bottom:1px solid #d8ceb4;padding:14px 16px;" +
+        "font-family:Georgia,'Noto Serif SC',serif;line-height:1.9}" +
+      ".sk-thm-paper .mes_text b{color:#7a4a1a}" +
+      /* 夜读 */
+      ".sk-thm-night .mes_text{background:#101418;color:#a8c8b0;border:1px solid #22303a;border-radius:8px;padding:11px 13px}" +
+      ".sk-thm-night .mes_text b{color:#7ec98f}.sk-thm-night .mes_text i{color:#6a9ab0}" +
+      /* ★ 底色：日间＝酒馆原本的样子（一条样式都不加，这才叫「原样」）；
+         夜间＝黑底浅字。写在主题后面，同权重时它压过美化主题，切底色立刻见效。 */
+      ".sk-bg-night .mes_text{background:#16181d;color:#e8e4d9;border:1px solid #2a2e36;border-radius:8px;padding:10px 12px}" +
+      ".sk-bg-night .mes_text b{color:#e0b968}.sk-bg-night .mes_text i{color:#a8c8d8}";
+    pdoc.head.appendChild(st);
+    shotState.css = true;
+  } catch (e) {}
+}
+/* 从图标往上找到它属于哪条消息。
+   ★ 不能写死 parentNode.parentNode —— 图标现在挂在 .mes_text 里（避开酒馆自带的
+     .mes_buttons），在某些主题下气泡可能再套一层，写死的层数就找不回 .mes。 */
+function shotMesOf(el) {
+  try {
+    if (el && el.closest) { var m = el.closest(".mes"); if (m) return m; }
+  } catch (e) {}
+  var p = el;
+  for (var i = 0; p && i < 6; i++) {
+    p = p.parentNode;
+    if (p && p.classList && p.classList.contains("mes")) return p;
+  }
+  return null;
+}
+/* 造一组图标挂到这条消息上（相机在上、复制在下 —— 他要「复制更靠下」）。
+   ★ 竖排 / 靠右 / 上抬的讲究写在上面 shotCSS 的注释里，改样式前先看那段。 */
+function shotOpsMake(m) {
+  var ops = pdoc.createElement("div");
+  ops.className = "sk-shot-ops";
+  var sh = pdoc.createElement("i");
+  sh.className = "sk-sh"; sh.title = "截图这一条消息（存进手机下载）"; sh.innerHTML = SHOT_SV.cam;
+  var cp = pdoc.createElement("i");
+  cp.className = "sk-cp"; cp.title = "复制这条消息的文字内容"; cp.innerHTML = SHOT_SV.cp;
+  ops.appendChild(sh); ops.appendChild(cp);          /* 先相机后复制 = 复制在下排 */
+  /* 挂进消息气泡里（有 .mes_text 就挂它，没有才退回挂 .mes）—— 见上面 CSS 的说明。
+     ⚠ 少数主题给 .mes_text 设了 overflow:hidden，absolute 的图标会被裁掉一半，
+       这种就退回挂到 .mes 上（宁可跟自带按钮挤一点，也不能看不见）。 */
+  var host = m.querySelector(".mes_text");
+  if (host) {
+    try {
+      var ov = pwin.getComputedStyle ? pwin.getComputedStyle(host).overflow : "";
+      if (ov === "hidden" || ov === "clip") host = null;
+    } catch (eOv) {}
+  }
+  (host || m).appendChild(ops);
+  sh.addEventListener("click", function (ev) {
+    ev.preventDefault(); ev.stopPropagation();
+    shotDo(shotMesOf(ev.currentTarget));
+  });
+  cp.addEventListener("click", function (ev) {
+    ev.preventDefault(); ev.stopPropagation();
+    shotCopy(shotMesOf(ev.currentTarget));
+  });
+  return ops;
+}
+/* ★★ 判据改成「气泡里真的有没有那组图标」，不再看 data-skshot 标记 ——
+   这是「图标时有时无」的根子：AI 流式输出时酒馆会一遍遍重写 .mes_text 的内容，
+   图标被冲掉了，可 .mes 上的标记还留着。以前只看标记 → 判定「已经挂过」→
+   这条消息从此再也不补图标，表现就是随机的「有的有、有的没有」。
+   现在不管标记，只看 DOM 里有没有真东西。 */
+function shotScan() {
+  if (!shotCfg.on) return 0;
+  var chat = pdoc.getElementById("chat"); if (!chat) return 0;
+  var mes = chat.querySelectorAll(".mes"), i, m, add = 0;
+  for (i = 0; i < mes.length; i++) {
+    m = mes[i];
+    if (!m.querySelector(".sk-shot-ops")) {
+      try { if (shotOpsMake(m)) add++; } catch (eAdd) { ownErr(eAdd); }
+      m.setAttribute("data-skshot", "1");
+    }
+    /* 主题跟着配置走（所见即所得） */
+    var want = shotCfg.thm ? "sk-thm-" + shotCfg.thm : "";
+    var cur = m.getAttribute("data-skthm") || "";
+    if (cur !== want) {
+      if (cur) m.classList.remove(cur);
+      if (want) m.classList.add(want);
+      m.setAttribute("data-skthm", want);
+    }
+    /* 底色跟着配置走：日间＝不加任何气泡样式（酒馆原本什么样就什么样），
+       夜间＝给 .mes_text 套黑底浅字。类名挂在 .mes 上，SVG 序列化时跟着一起带走。 */
+    var wantBg = "sk-bg-" + shotCfg.bg;
+    var curBg = m.getAttribute("data-skbg") || "";
+    if (curBg !== wantBg) {
+      if (curBg) m.classList.remove(curBg);
+      m.classList.add(wantBg);
+      m.setAttribute("data-skbg", wantBg);
+    }
+  }
+  return add;
+}
+function shotUninstall() {
+  try {
+    var chat = pdoc.getElementById("chat"); if (!chat) return;
+    /* 全量扫 .mes（不按标记找）：标记可能跟真实 DOM 对不上，漏一条就留个野图标 */
+    var mes = chat.querySelectorAll(".mes"), i;
+    for (i = 0; i < mes.length; i++) {
+      var m = mes[i];
+      var ops = m.querySelector(".sk-shot-ops"); if (ops) ops.remove();
+      var th = m.getAttribute("data-skthm");
+      if (th) m.classList.remove(th);
+      var bg = m.getAttribute("data-skbg");
+      if (bg) m.classList.remove(bg);
+      m.removeAttribute("data-skshot"); m.removeAttribute("data-skthm");
+      m.removeAttribute("data-skbg");
+    }
+  } catch (e) {}
+}
+/* observer 必须挂在【当前这个】#chat 元素上。换聊天 / 切角色时酒馆会整个换掉
+   #chat 节点，挂在旧节点上的 observer 从此收不到任何动静，图标就再也不补了 ——
+   这也是「时有时无」的一条来源。心跳里每拍核一次，换了就重挂。 */
+function shotWatch() {
+  if (!shotCfg.on || !pwin.MutationObserver) return false;
+  var chat = pdoc.getElementById("chat"); if (!chat) return false;
+  if (shotState.obs && shotState.obsOn === chat) return false;
+  if (shotState.obs) { try { shotState.obs.disconnect(); } catch (e0) {} shotState.obs = null; }
+  try {
+    shotState.obs = new pwin.MutationObserver(function () {
+      clearTimeout(shotState.t);
+      shotState.t = setTimeout(shotScan, 150);   /* 新消息渲染完再补图标（去抖防抖成筛子） */
+    });
+    shotState.obs.observe(chat, { childList: true, subtree: true });
+    shotState.obsOn = chat;
+    return true;
+  } catch (e) {
+    shotState.obs = null; shotState.obsOn = null;
+    return false;
+  }
+}
+function shotApply() {
+  if (!shotState.css) shotCSS();
+  if (shotCfg.on) { shotScan(); shotWatch(); }
+  else {
+    if (shotState.obs) { try { shotState.obs.disconnect(); } catch (e) {} shotState.obs = null; }
+    shotState.obsOn = null;
+    shotUninstall();
+  }
+}
+/* 心跳兜底：observer 只认【节点增删】，认不出「气泡内容被整个重写而不动节点数」，
+   所以每拍再实扫一遍。开销就是一次 querySelectorAll + 每条一次子树查询，可忽略。 */
+function shotTick() {
+  if (!shotCfg.on || !pwin.SillyTavern) return;
+  try {
+    var re = shotWatch();
+    var n = shotScan();
+    if (n > 0) shotLog("补挂", "心跳补上 " + n + " 条消息的图标"
+      + (re ? "（#chat 刚被换掉，observer 已重挂）" : "（observer 这次漏了）"));
+  } catch (eTick) { errSave(ownErr(eTick)); }
+}
+/* ── 截图渲染：★ 不用 html2canvas ──
+   ★★ 为什么换掉（真机 11-03：手机上一按直接卡死）：
+     html2canvas 会把整棵 DOM 重新解析、逐个元素按 CSS 重画一遍。scale=3 时，
+     一条长回复在手机上就是 1200×6000+ 的画布、几十万次绘制 —— 手机直接卡死。
+     他让我参考的小剧场插件（character-theatre）那份能用的样本也是绕开它的：
+     离屏 SVG foreignObject → 交给浏览器把 SVG 画进 canvas。
+   ★ 这条路线好在哪：**放大只是把同一张 SVG 按更高分辨率栅格化，不会重跑 DOM 布局**，
+     所以「清晰度」调高也不会变慢 —— 它慢的只有一次 SVG 解析。
+   ⚠ 三个必须做的保护（小剧场那份没做全，所以它老掉到兜底）：
+     ① 图片必须先转 dataURL：foreignObject 里引用外部资源，Safari 会**整张拒绝渲染**
+     ② 内容要按 XML 序列化（不能拿 innerHTML 直接塞）：`<br>` 不闭合、`&nbsp;`
+        这类 HTML 实体在 XML 里都非法，会让整张 SVG 解析失败
+     ③ 画布有上限：超过手机扛得住的像素就自动降倍数（见 shotScale）
+   万一这条路还不通 → shotTextPNG：纯 canvas 画文字，怎么着都能出一张图。 */
+/* 900 万而不是 1600 万 ★（11-03 真机教训）：1600 万像素的 PNG 能到 20~40 MB，
+   手机上的下载器和内存根本吃不下 —— 表现就是「点了截图，转头弹一句带 blob 地址的
+   下载失败」。宁可少一点像素，也要让这张图真的落进「下载」。 */
+var SHOT_MAXPX = 9000000;       /* 画布总像素上限（超了手机直接白屏/崩） */
+var SHOT_MAXSIDE = 8000;        /* 单边上限 */
+var SHOT_MAXB = 10 * 1024 * 1024;   /* 出图体积上限：超了自动降一档重画，不超就照原样 */
+var SHOT_W = 560;               /* 出图的逻辑宽度（竖屏好读） */
+/* ★ 清晰度倍数：先按设置来，再被手机能力压回来。
+     长消息最容易被压（高 × 长 = 像素爆表），压了会在 toast 里说明，不闷声降。 */
+function shotScale(w, h) {
+  var s = Math.min(4, Math.max(1, +shotCfg.dpi || 2));
+  var area = (w || 1) * (h || 1);
+  if (area > 0) s = Math.min(s, Math.sqrt(SHOT_MAXPX / area), SHOT_MAXSIDE / Math.max(w || 1, h || 1));
+  /* ⚠ 下限不能设太高：设 0.5 的话遇到极长消息（h>16000）会反过来把画布顶过上限，
+     等于保护失效。0.2 这个下限只在「几万像素高」的极端情况才可能碰到。 */
+  return Math.max(0.2, Math.min(4, s));
+}
+/* 克隆体上的清理：按钮、脚本、输入框这些不该出现在图里。
+   ★ 小剧场那份只清了 button —— 酒馆的 .mes_buttons（编辑/删除/继续）一整排会进图，
+     我们自己的截图/复制图标也会进图，所以这两个必须一起清掉。 */
+function shotClean(cl) {
+  var ns = cl.querySelectorAll("button,.mes_buttons,.sk-shot-ops,script,style,noscript,"
+    + "iframe,video,audio,textarea,input,select,svg");
+  for (var i = 0; i < ns.length; i++) { try { ns[i].remove(); } catch (e) {} }
+}
+/* 图片转 dataURL（foreignObject 里外部链接会整张失败）。
+   ★ 带三重保护：单张超时、总量超时、超大图先缩一道 ——
+     几千像素的原图转 dataURL 会把内存撑爆（小剧场那份没缩，是它的老毛病）。 */
+function shotInline(cl, cb) {
+  var imgs = cl.querySelectorAll("img"), n = imgs.length, left = n, fin = false;
+  var go = function () { if (!fin) { fin = true; clearTimeout(tm); cb(); } };
+  var tm = setTimeout(go, 6000);                    /* 总量超时：再慢也不能把人晾着 */
+  if (!n) { go(); return; }
+  var one = function () { if (--left <= 0) go(); };
+  for (var i = 0; i < n; i++) (function (im) {
+    var src = im.getAttribute("src") || "";
+    if (!src || src.indexOf("data:") === 0) { one(); return; }
+    var done = false;
+    var step = function () { if (!done) { done = true; one(); } };
+    var t = new pwin.Image();
+    try { t.crossOrigin = "anonymous"; } catch (e) {}
+    t.onload = function () {
+      try {
+        var w = t.naturalWidth || 0, h = t.naturalHeight || 0, max = 900;
+        var sc = (w > max || h > max) ? Math.min(1, max / Math.max(w, h)) : 1;
+        var c = pdoc.createElement("canvas");
+        c.width = Math.max(1, Math.round(w * sc)); c.height = Math.max(1, Math.round(h * sc));
+        c.getContext("2d").drawImage(t, 0, 0, c.width, c.height);
+        im.setAttribute("src", c.toDataURL("image/jpeg", 0.85));
+      } catch (e) {}
+      step();
+    };
+    t.onerror = step;
+    setTimeout(step, 2500);                        /* 单张超时 */
+    try { t.src = src; } catch (e) { step(); }
+  })(imgs[i]);
+}
+/* ★ 样式必须内联进 SVG —— 外部 CSS 在 foreignObject 里完全不生效，
+     不内联的话截出来就是一堆裸标签（黑字白底，什么美化都没有）。 */
+var SHOT_CSS =
+  /* ★ 11-04 默认日间白底。以前这一整段是 #16181d 黑底浅字（他截出来一片黑），
+     现在把那套深色配色整个搬到末尾的 .sk-bg-night 里当可选底色。 */
+  ".sk-shot-wrap{background:#ffffff;color:#2b2b2b;padding:14px 16px;box-sizing:border-box;"
+  + "font:15px/1.75 -apple-system,'PingFang SC','Microsoft YaHei',sans-serif;word-break:break-word}"
+  + ".sk-shot-wrap *{max-width:100%;box-sizing:border-box}"
+  + ".sk-shot-wrap p{margin:0 0 10px}"
+  + ".sk-shot-wrap img{max-width:100%;height:auto;display:block;margin:8px 0;border-radius:8px}"
+  + ".sk-shot-wrap b,.sk-shot-wrap strong{color:#8a6420;font-weight:700}"
+  + ".sk-shot-wrap i,.sk-shot-wrap em{color:#7a4f8a}"
+  + ".sk-shot-wrap blockquote{margin:10px 0;padding:8px 12px;border-left:3px solid #b8944a;"
+  + "background:rgba(184,148,74,.08);border-radius:0 6px 6px 0;color:#5c5344}"
+  + ".sk-shot-wrap code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;"
+  + "font:13px/1.6 monospace}"
+  + ".sk-shot-wrap pre{margin:10px 0;padding:10px 12px;background:rgba(0,0,0,.045);border-radius:8px;"
+  + "white-space:pre-wrap;font:13px/1.65 monospace}"
+  + ".sk-shot-wrap ul,.sk-shot-wrap ol{margin:8px 0;padding-left:22px}"
+  + ".sk-shot-wrap h1,.sk-shot-wrap h2,.sk-shot-wrap h3{color:#8a6420;margin:12px 0 8px;font-size:17px}"
+  + ".sk-shot-wrap a{color:#2a6496;text-decoration:none}"
+  + ".sk-shot-wrap .mes_name{font-weight:700;color:#8a6420;margin:0 0 8px;font-size:14px}"
+  + ".sk-shot-wrap .mes_avatar{width:46px;height:46px;border-radius:50%;float:left;"
+  + "margin:0 10px 6px 0;object-fit:cover}"
+  /* 主题：卡片 */
+  + ".sk-shot-wrap.sk-thm-card{background:#fdfbf5;color:#3a3226;border-radius:12px;"
+  + "border-left:5px solid #b8944a}"
+  + ".sk-shot-wrap.sk-thm-card b,.sk-shot-wrap.sk-thm-card strong{color:#8a6420}"
+  + ".sk-shot-wrap.sk-thm-card i,.sk-shot-wrap.sk-thm-card em{color:#7a4f8a}"
+  + ".sk-shot-wrap.sk-thm-card .mes_name{color:#8a6420}"
+  + ".sk-shot-wrap.sk-thm-card blockquote{background:rgba(184,148,74,.10);border-left-color:#b8944a;color:#5c5344}"
+  + ".sk-shot-wrap.sk-thm-card pre{background:rgba(0,0,0,.06)}"
+  /* 主题：信纸 */
+  + ".sk-shot-wrap.sk-thm-paper{background:#f7f2e7;color:#41392c;border-radius:3px;padding:18px 20px;"
+  + "font-family:Georgia,'Noto Serif SC',serif;line-height:1.9}"
+  + ".sk-shot-wrap.sk-thm-paper b,.sk-shot-wrap.sk-thm-paper strong{color:#7a4a1a}"
+  + ".sk-shot-wrap.sk-thm-paper .mes_name{color:#7a4a1a}"
+  + ".sk-shot-wrap.sk-thm-paper blockquote{background:rgba(122,74,26,.08);border-left-color:#7a4a1a;color:#5a4f3c}"
+  /* 主题：夜读（深色主题要把 code / pre / 标题 / 链接也补齐，不然白底基础上会漏出亮块） */
+  + ".sk-shot-wrap.sk-thm-night{background:#101418;color:#a8c8b0;border-radius:10px}"
+  + ".sk-shot-wrap.sk-thm-night b,.sk-shot-wrap.sk-thm-night strong{color:#7ec98f}"
+  + ".sk-shot-wrap.sk-thm-night i,.sk-shot-wrap.sk-thm-night em{color:#6a9ab0}"
+  + ".sk-shot-wrap.sk-thm-night .mes_name{color:#7ec98f}"
+  + ".sk-shot-wrap.sk-thm-night code{background:rgba(255,255,255,.08)}"
+  + ".sk-shot-wrap.sk-thm-night pre{background:rgba(0,0,0,.35)}"
+  + ".sk-shot-wrap.sk-thm-night h1,.sk-shot-wrap.sk-thm-night h2,.sk-shot-wrap.sk-thm-night h3{color:#7ec98f}"
+  + ".sk-shot-wrap.sk-thm-night a{color:#8ab4d8}"
+  + ".sk-shot-wrap.sk-thm-night blockquote{background:rgba(126,201,143,.08);border-left-color:#7ec98f;color:#8fae97}"
+  /* ── 底色：夜间黑底（就是 11-04 之前那套默认配色，现在变成可选项）──
+     ★ 必须写在【所有主题之后】：选择器权重跟 .sk-thm-* 同级，靠顺序压过去。
+       这样「底色」是独立于美化的总开关，选卡片 / 信纸时也能一键切成黑底，
+       不会出现「黑底 + 深色字」那种看不清的混搭。 */
+  + ".sk-shot-wrap.sk-bg-night{background:#16181d;color:#e8e4d9}"
+  + ".sk-shot-wrap.sk-bg-night b,.sk-shot-wrap.sk-bg-night strong{color:#e0b968}"
+  + ".sk-shot-wrap.sk-bg-night i,.sk-shot-wrap.sk-bg-night em{color:#a8c8d8}"
+  + ".sk-shot-wrap.sk-bg-night blockquote{background:rgba(255,255,255,.05);border-left-color:#b8944a;color:#cfcabc}"
+  + ".sk-shot-wrap.sk-bg-night code{background:rgba(255,255,255,.08)}"
+  + ".sk-shot-wrap.sk-bg-night pre{background:rgba(0,0,0,.35)}"
+  + ".sk-shot-wrap.sk-bg-night h1,.sk-shot-wrap.sk-bg-night h2,.sk-shot-wrap.sk-bg-night h3{color:#e0b968}"
+  + ".sk-shot-wrap.sk-bg-night a{color:#8ab4d8}"
+  + ".sk-shot-wrap.sk-bg-night .mes_name{color:#e0b968}";
+/* 把内容包成一张 SVG。★ 用 XMLSerializer 而不是 innerHTML：
+   XML 不认 `<br>`（必须自闭合）、也不认 `&nbsp;` 这类 HTML 实体，
+   直接塞 innerHTML 会让整张 SVG 解析失败 —— 序列化出来的则是干净的 XHTML。 */
+function shotBuildSVG(cl, w, h) {
+  var inner = "";
+  try { inner = new pwin.XMLSerializer().serializeToString(cl); } catch (e) {}
+  if (!inner) {
+    /* 实在拿不到就退回 innerHTML，并把 void 元素补成自闭合（XML 才认） */
+    inner = String(cl.innerHTML || "").replace(
+      /<(br|hr|img|input|meta|link|source|area|base|col|embed|param|track|wbr)\b([^>]*?)>/gi,
+      function (m, tag, at) { return /\/\s*$/.test(at) ? m : "<" + tag + at + " />"; });
+  }
+  var thm = shotCfg.thm ? " sk-thm-" + shotCfg.thm : "";
+  var bg = " sk-bg-" + shotCfg.bg;      /* 底色类名：日间白底 / 夜间黑底，切了立刻生效 */
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">'
+    + '<foreignObject width="100%" height="100%">'
+    + '<div xmlns="http://www.w3.org/1999/xhtml" class="sk-shot-wrap' + thm + bg + '"'
+    + ' style="width:' + w + 'px;min-height:' + h + 'px;box-sizing:border-box;">'
+    + '<style>' + SHOT_CSS + '</style>' + inner + '</div></foreignObject></svg>';
+}
+/* ★★ 11-04 真机日志钉死的根因：他的 Android 12 / Chrome 97 WebView 里
+     `pwin.URL.createObjectURL` **不是函数**（酒馆助手那个上下文把 URL 覆盖了），
+     日志原话：「中文名：pwin.URL.createObjectURL is not a function」。
+   于是：SVG 一开局就抛错 → 降级成纯文字 → 保存时又抛同一个错 → 两条失败记录。
+   ★ 所以整条截图链【不许再假设】createObjectURL 存在：
+     能喂给 <img> / <a> 的地址，要么 blob: URL，要么直接就是 data: URL。 */
+function shotURL() { try { return pwin.URL || pwin.webkitURL || null; } catch (e) { return null; } }
+function shotCanURL() {
+  try { var U = shotURL(); return !!(U && typeof U.createObjectURL === "function"); }
+  catch (e) { return false; }
+}
+/* SVG 字符串 → 能喂给 <img src> 的地址。
+   ⚠ data: 那条路必须 encodeURIComponent：SVG 里有 # & 中文和引号，原样拼会把 URL 截断。 */
+function shotSvgSrc(svg) {
+  if (shotCanURL()) {
+    try {
+      var U = shotURL(), b = new pwin.Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+      var u = U.createObjectURL(b);
+      return { src: u, clear: function () { try { U.revokeObjectURL(u); } catch (e) {} } };
+    } catch (e) {}
+  }
+  return { src: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg),
+           clear: function () {} };
+}
+/* Blob / dataURL → 能塞进 <a href> 的地址。
+   ★ 没有 createObjectURL 时用 FileReader 把 Blob 读成 dataURL ——
+     Android WebView 上最稳的一条，不碰任何被覆盖的 URL 静态方法，也不碰文件系统。 */
+function shotHref(src, cb) {
+  if (typeof src === "string") { cb(src, function () {}); return; }   /* 本来就是 dataURL */
+  if (shotCanURL()) {
+    try {
+      var U = shotURL(), u = U.createObjectURL(src);
+      cb(u, function () { try { U.revokeObjectURL(u); } catch (e) {} });
+      return;
+    } catch (e) {}
+  }
+  try {
+    var fr = new pwin.FileReader();
+    fr.onload = function () { cb(String(fr.result || ""), function () {}); };
+    fr.onerror = function () { cb("", function () {}); };
+    fr.readAsDataURL(src);
+    return;
+  } catch (e) {}
+  cb("", function () {});
+}
+/* 主路：SVG → canvas → 图片。失败/超时都走 fail（由调用方切到纯文本兜底）。 */
+function shotRaster(mes, cl, ok, fail) {
+  var host = null;
+  try {
+    host = pdoc.createElement("div");
+    host.style.cssText = "position:absolute;left:0;top:0;visibility:hidden;pointer-events:none;"
+      + "width:" + SHOT_W + "px;box-sizing:border-box;z-index:-1;";
+    host.appendChild(cl);
+    pdoc.body.appendChild(host);
+    var w = Math.max(200, Math.min(SHOT_W, host.scrollWidth || SHOT_W));
+    var h = Math.max(120, host.scrollHeight || 300);
+    var svg = shotBuildSVG(cl, w, h);
+    host.remove(); host = null;
+
+    /* ★ 不再直接调 createObjectURL：他的 WebView 上没有这个函数（真机日志实锤） */
+    var ref = shotSvgSrc(svg);
+    var img = new pwin.Image(), fin = false;
+    var clear = function () { try { ref.clear(); } catch (e) {} };
+    var lose = function () { if (fin) return; fin = true; clear(); fail(); };
+    img.onload = function () {
+      if (fin) return;
+      try {
+        var jpg = (shotCfg.fmt === "jpg"), mime = jpg ? "image/jpeg" : "image/png";
+        /* ★ 出图后先看体积：太大就按体积等比降一档重画（只重画画布，SVG 不用再解析一遍）。
+           ★★ 为什么非得有这一步：十几 MB 的图在手机上，下载器要么写到一半断掉、
+              要么直接把内存打爆 —— 弹出来的就是那句带 blob 地址的「下载失败」。
+              所以「宁可降一点清晰度，也要真的存下来」。 */
+        var shoot = function (sc, again) {
+          var c = pdoc.createElement("canvas");
+          c.width = Math.max(1, Math.round(w * sc)); c.height = Math.max(1, Math.round(h * sc));
+          var g = c.getContext("2d");
+          if (jpg) { g.fillStyle = "#ffffff"; g.fillRect(0, 0, c.width, c.height); }
+          g.drawImage(img, 0, 0, c.width, c.height);
+          var q = (jpg && again) ? 0.8 : 0.92;
+          var got = function (bb) {
+            if (fin) return;
+            /* 老 WebView 没有 canvas.toBlob 时，got 拿到的是 dataURL **字符串** ——
+               体积按 base64 长度折算，别再用 bb.size（undefined 会让体积保护整个失效） */
+            var sz = (typeof bb === "string") ? Math.round(bb.length * 0.75) : ((bb && bb.size) || 0);
+            if (bb && sz > SHOT_MAXB && !again && sc > 0.4) {
+              shoot(Math.max(0.4, sc * Math.sqrt(SHOT_MAXB / sz) * 0.9), true);
+              return;
+            }
+            fin = true; clear();
+            if (bb) ok(bb, sc); else fail();
+          };
+          if (c.toBlob) c.toBlob(got, mime, q);
+          else got(c.toDataURL(mime, q));   /* ★ 直接给 dataURL，不再绕 Blob（老 WebView 上 atob 未必全） */
+        };
+        shoot(shotScale(w, h), false);
+      } catch (e) { ownErr(e); lose(); }
+    };
+    img.onerror = lose;
+    img.src = ref.src;
+    setTimeout(lose, 12000);                       /* 整体超时：卡住也不能一直卡着 */
+  } catch (e) {
+    if (host) { try { host.remove(); } catch (e2) {} }
+    ownErr(e); fail();
+  }
+}
+/* 兜底：纯 canvas 画文字。SVG 那条路在某些 iOS 上对 foreignObject 挑得很，
+   这条保证「怎么着都能出一张图」—— 顶上有说话人横幅，正文自动换行不截断。 */
+function shotTextPNG(mes) {
+  try {
+    var tx = shotMesText(mes);
+    if (!tx) return null;
+    var who = shotWho(mes);
+    var W = SHOT_W, pad = 24, lh = 30, fsz = 16, banner = 46;
+    var c0 = pdoc.createElement("canvas");
+    var g0 = c0.getContext("2d"); if (!g0) return null;
+    g0.font = fsz + "px sans-serif";
+    var lines = [], ps = String(tx).split(/\r?\n/), i, seg, cut;
+    for (i = 0; i < ps.length; i++) {
+      seg = ps[i] || " ";
+      while (g0.measureText(seg).width > W - pad * 2 && seg.length > 1) {
+        cut = seg.length - 1;
+        while (cut > 1 && g0.measureText(seg.slice(0, cut)).width > W - pad * 2) cut--;
+        lines.push(seg.slice(0, cut)); seg = seg.slice(cut);
+      }
+      lines.push(seg);
+    }
+    var H = Math.max(160, banner + pad * 2 + lines.length * lh);
+    var sc = shotScale(W, H);
+    var c = pdoc.createElement("canvas");
+    c.width = Math.max(1, Math.round(W * sc)); c.height = Math.max(1, Math.round(H * sc));
+    var g = c.getContext("2d"); if (!g) return null;
+    /* ★ 兜底图也得跟着「底色」走 —— 不然主路白底、降级却吐一张黑图，会以为是 bug */
+    var isNight = (shotCfg.bg === "night");
+    g.scale(sc, sc);
+    g.fillStyle = isNight ? "#16181d" : "#ffffff"; g.fillRect(0, 0, W, H);
+    g.fillStyle = "#b8944a"; g.fillRect(0, 0, W, banner);
+    g.fillStyle = "#16181d"; g.font = "bold 15px sans-serif"; g.textBaseline = "middle";
+    g.fillText(who, pad, banner / 2);
+    g.fillStyle = isNight ? "#e8e4d9" : "#2b2b2b"; g.font = fsz + "px sans-serif"; g.textBaseline = "alphabetic";
+    var y = banner + pad;
+    for (i = 0; i < lines.length; i++) { g.fillText(lines[i], pad, y); y += lh; }
+    return c.toDataURL("image/png");
+  } catch (e) { ownErr(e); return null; }
+}
+function shotMesText(mes) {
+  if (!mes) return "";
+  var sels = [".mes_text", ".mes_text_inner", ".mes_block"], i, n, v;
+  for (i = 0; i < sels.length; i++) {
+    try {
+      n = mes.querySelector(sels[i]);
+      if (n) { v = String(n.innerText || n.textContent || "").trim(); if (v) return v; }
+    } catch (e) {}
+  }
+  return String(mes.innerText || mes.textContent || "").trim();
+}
+function shotWho(mes) {
+  var who = "", fl = "";
+  try {
+    var n = mes.querySelector(".mes_name") || mes.querySelector(".name");
+    if (n) who = String(n.textContent || "").trim();
+    fl = mes.getAttribute("mesid") || "";
+  } catch (e) {}
+  if (!who) who = "消息";
+  return who + (fl ? " · 第 " + fl + " 楼" : "");
+}
+function dataURLToBlob(u) {
+  try {
+    var a = String(u).split(","), mime = (a[0].match(/:(.*?);/) || [])[1] || "image/png";
+    var bin = pwin.atob(a[1] || ""), n = bin.length, arr = new pwin.Uint8Array(n);
+    for (var i = 0; i < n; i++) arr[i] = bin.charCodeAt(i);
+    return new pwin.Blob([arr], { type: mime });
+  } catch (e) { ownErr(e); return null; }
+}
+function shotDo(mes) {
+  if (!mes) return;
+  if (!shotCfg.on) return;
+  /* 上一张没出完就别再点：手机上连点两下最容易把内存打爆（这也是卡死的一种） */
+  if (shotState.busy) { toast("上一张还在出，稍等一下"); return; }
+  shotState.busy = true;
+  toast("正在截图…");
+  var done = function () { shotState.busy = false; };
+  var cl = mes.cloneNode(true);
+  shotClean(cl);
+  shotInline(cl, function () {
+      shotRaster(mes, cl, function (blob, sc) {
+      done(); shotSaveBlob(mes, blob, sc);
+    }, function () {
+      shotLog("降级", "SVG 那条路没出成图（"
+        + (shotCanURL() ? "createObjectURL 可用" : "createObjectURL 不可用 → 已走 data: URL")
+        + "），改走纯文字兜底");
+      var u = shotTextPNG(mes);
+      done();
+      if (u) shotSaveBlob(mes, u, 0, true);
+      else { shotLog("失败", "纯文字兜底也没出图（这条消息取不到文字）"); toast("这条出不了图 —— 点下面那个方块能把文字复制走"); }
+    });
+  });
+}
+/* ★ 只走内存 → 浏览器下载 → 手机「下载」文件夹。
+   ★★ 他特意强调过：旧版明明只该进「下载」，结果应用自己的系统目录里也堆了一堆图 ——
+     所以这里从头到尾不碰应用目录，连一个临时文件都不落，用完 revoke 连内存一起放掉。 */
+function shotSaveBlob(mes, src, sc, isText) {
+  if (!src) { shotLog("失败", "图没生成出来（内容为空）"); toast("生成图片失败"); return; }
+  var jpg = (shotCfg.fmt === "jpg" && !isText), ext = jpg ? "jpg" : "png";
+  var isStr = (typeof src === "string");
+  /* 体积：Blob 用 size；dataURL 按 base64 长度折算（老 WebView 直接给字符串时） */
+  var sizeB = isStr
+    ? Math.round(Math.max(0, src.length - (src.indexOf(",") + 1)) * 0.75)
+    : (+src.size || 0);
+  var kb = sizeB / 1024;
+  var d = new Date(), p2 = function (n) { return (n < 10 ? "0" : "") + n; };
+  var stamp = p2(d.getHours()) + p2(d.getMinutes());
+  /* 文件名剔掉下载器不认的字符（\ / : * ? " < > |）；中文留着 —— 他要能一眼看懂是哪个 */
+  var safe = function (s) { return String(s).replace(/[\\/:*?"<>|]/g, "_"); };
+  var name = safe("酒馆_第" + (mes.getAttribute("mesid") || "?") + "楼_" + stamp) + "." + ext;
+  var en = "tavern_" + (mes.getAttribute("mesid") || "0") + "_" + stamp + "." + ext;
+  var sizeTx = kb >= 1024 ? (kb / 1024).toFixed(1) + " MB" : Math.round(kb) + " KB";
+  var msg = "已截图 · 存进手机「下载」：" + name + "（" + sizeTx + "）";
+  /* 清晰度被手机上限压回来了要说明白 —— 闷声降会被当成「画质变差了」 */
+  if (sc && sc < (+shotCfg.dpi || 2) - 0.01) msg += " · 这条太长，清晰度自动降到 " + sc.toFixed(1) + "×";
+  if (isText) msg += "（纯文字版）";
+  /* ★★ 先把图变成能塞进 <a href> 的地址：
+     有 createObjectURL → blob:；没有（他的 Android WebView）→ FileReader 读成 data:。
+     全程内存，不碰酒馆 data 目录、不落临时文件。 */
+  shotHref(src, function (href, release) {
+    var how = href.indexOf("data:") === 0 ? "dataURL" : "blob";
+    if (!href) {
+      shotLog("失败", "图转不出可下载的地址（createObjectURL 不可用、FileReader 也没读出来）"
+        + " ｜ " + sizeTx);
+      toast("保存失败 · 去截图页签点「复制日志」把这段发给我");
+      return;
+    }
+    var put = function (nm) {
+      var a = pdoc.createElement("a");
+      a.href = href; a.download = nm; a.rel = "noopener";
+      a.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px";
+      /* 下载动作放在主页面（pdoc / pwin 指向 parent，不是脚本自己那个小 iframe） */
+      pdoc.body.appendChild(a); a.click(); a.remove();
+    };
+    var okSave = function (nm, note) {
+      shotLog("成功", nm + " · " + sizeTx + (sc ? " · " + sc.toFixed(1) + "×" : "")
+        + (isText ? " · 纯文字版" : "") + " · " + how + (note ? " · " + note : ""));
+      toast(msg);
+      /* ★★ 60 秒后才撤（以前 8 秒，下载器还没读完就中断了）；
+         dataURL 那条路 release 是空函数，调了也无害 */
+      setTimeout(function () { try { release(); } catch (e) {} }, 60000);
+    };
+    try { put(name); okSave(name); }
+    catch (e1) {
+      /* 兜底：换纯英文名再来一次（少数下载器不认中文名 / 特殊字符） */
+      try { put(en); okSave(en, "中文名被拒：" + (e1 && e1.message)); }
+      catch (e2) {
+        ownErr(e2);
+        shotLog("失败", "中文名：" + (e1 && e1.message) + " ｜ 英文名：" + (e2 && e2.message)
+          + " ｜ " + sizeTx + " ｜ " + how + " ｜ " + (sc ? sc.toFixed(1) + "×" : "?"));
+        /* 报错一闪而过复制不了 —— 只留一句指引，详情在截图页签的「复制日志」里 */
+        toast("保存失败（" + sizeTx + "）· 去截图页签点「复制日志」把这段发给我");
+        try { release(); } catch (e3) {}
+      }
+    }
+  });
+}
+function shotCopy(mes) {
+  if (!mes) return;
+  var tx = mes.querySelector(".mes_text");
+  var v = tx ? (tx.innerText || tx.textContent || "") : "";
+  v = String(v).trim();
+  if (!v) { toast("这条消息没有文字"); return; }
+  copyTextTo(v, "已复制这条消息的内容（" + v.length + " 字）");
+}
+/* 截图设置页（面板第五个页签）
+   ★ 排版跟「导出」页签走同一套组件（.exwrap / .exlb1 / .exseg / .exb / .exhint），
+     别自己造一排样式 —— 五个页签要像同一个面板里的五页，不是五个插件拼起来的。 */
+function renderShot() {
+  var el = QI("list"); if (!el) return;
+  var c = shotCfg;
+  var thms = [["", "原样"], ["card", "卡片"], ["paper", "信纸"], ["night", "夜读"]];
+  var segb = function (attr, on, txt) {
+    return '<button class="exb' + (on ? " on" : "") + '" ' + attr + '><i class="dot"></i>' + txt + "</button>";
+  };
+  var logs = shotLogs();
+  el.innerHTML = '<div class="exwrap">'
+    + '<div class="exlb1">怎么用</div>'
+    + '<div class="exhint">每条消息<b>右侧竖着两个</b>小图标：上面<b>相机</b>把<b>这一条</b>对话存成图片，'
+    +   '下面<b>方块</b>复制这条消息的文字（竖排是为了不跟下面那排「继续 / 下一页生成」挨在一起，'
+    +   '免得点复制点错触发生成）。<br>只截你点的那一条，不会把整个聊天都截进去。</div>'
+    + '<div class="exlb1">图片存到哪</div>'
+    + '<div class="exhint">进手机「下载」文件夹。<b>不写酒馆自己的目录（data 那些）、不留临时文件</b>，'
+    +   '全程在内存里，截完就释放。</div>'
+    + '<div class="exlb1">开关</div>'
+    + '<div class="exseg">' + segb('data-shotsw="1"', c.on, c.on ? "已开启" : "已停用") + "</div>"
+    + '<div class="exlb1">清晰度 · 越高越清晰，文件也越大</div>'
+    + '<div class="exhint" style="margin-top:-2px">太长的消息会按手机能扛的上限<b>自动降一点</b>，'
+    +   '存图时会告诉你降到了多少 —— 不然手机直接卡死。</div>'
+    + '<div class="exrow sliderow">'
+    +   '<input type="range" class="sld" id="shotDpi" min="1" max="4" step="0.5" value="' + c.dpi + '">'
+    +   '<span class="sv" id="shotDpiV">' + c.dpi.toFixed(1) + "×</span>"
+    + "</div>"
+    + '<div class="exlb1">格式</div>'
+    + '<div class="exseg">'
+    +   segb('data-shotfmt="png"', c.fmt === "png", "PNG 无损")
+    +   segb('data-shotfmt="jpg"', c.fmt === "jpg", "JPG 更小")
+    + "</div>"
+    + '<div class="exlb1">底色 · 默认日间白底（跟下面那排美化一样，点一下就换）</div>'
+    + '<div class="exseg">'
+    +   segb('data-shotbg="day"', c.bg === "day", "日间 · 白底")
+    +   segb('data-shotbg="night"', c.bg === "night", "夜间 · 黑底")
+    + "</div>"
+    + '<div class="exlb1">HTML 美化 · 聊天气泡当场换装，截下来就是看到的</div>'
+    + '<div class="exseg">' + thms.map(function (t) {
+        return segb('data-shotthm="' + t[0] + '"', c.thm === t[0], t[1]);
+      }).join("") + "</div>"
+    + '<div class="exlb1">出图记录 · 存不下来就复制这段发给我</div>'
+    + '<div class="exhint" style="margin-top:-2px">每一次截图（成功 / 降级 / 失败）都记一行，'
+    +   '最近 ' + Math.min(5, logs.length) + " 条在这儿，最多留 " + SHOT_LOGN + " 条。"
+    +   '存不进去、或者冒出看不懂的报错时，点「复制日志」整段发给我 —— 里面连手机环境都带着，'
+    +   '比我在这儿猜快得多。</div>'
+    + '<div class="sklog">'
+    +   (logs.length ? logs.slice(0, 5).map(function (s) {
+          return '<div class="sklogrow">' + esc(s) + "</div>";
+        }).join("") : '<div class="sklogrow dim">（还没有出过图）</div>')
+    + "</div>"
+    + '<div class="exseg">'
+    +   '<button class="exb" data-shotlogcopy="1"><i class="dot"></i>复制日志</button>'
+    +   '<button class="exb" data-shotlogclr="1"><i class="dot"></i>清空</button>'
+    + "</div>"
+    + "</div>";
+}
+
+/* =====================================================================
    心跳：① 把跑丢的球拽回来 ② 你在酒馆里换了预设 → 这边自动跟着换
    ===================================================================== */
 var lastFp = "";
@@ -3855,6 +5508,9 @@ function tick() {
   orbClamp();
   /* 启动时哪一步没跑通 → 心跳里自己补跑几次（最多 3 次，别没完没了地试） */
   if (!bootOK && bootFixN < 3) { bootFixN++; bootResume(); }
+  /* 截图 / 复制图标：放在 apiReady 闸门【之前】—— 补图标只是往气泡里挂两个键，
+     不依赖酒馆接口，没道理因为接口还没好就跟着一起停摆。 */
+  if (shotCfg.on) { try { shotTick(); } catch (eShot) { errSave(ownErr(eShot)); } }
   if (!apiReady()) return;
   /* ① 酒馆那边换了预设 → 跟着换。
      ⚠ 这两段必须各自 try：以前共用一个 try，读预设一抛错（脏数据），
@@ -3956,20 +5612,30 @@ function orbInit() {
   var orbEl = QI("orb");
   if (!orbEl) { bootStepRun("球", function () { throw new Error("DOM 里没找到 #orb"); }); return; }
   try {
-    /* 恢复上次拖到的位置；没拖过 → 底边居中 */
+    /* ★★ 11-04：默认一律正中间，只有【用户亲手拖过】才恢复记忆位置。
+       旧版一启动就把算出来的坐标写进 pos（还会左右贴边吸附），之后每次都恢复它 ——
+       他曾在贴边 / 小窗口下开过一次，球就被永久钉在那个坐标，小窗里根本找不着。
+       老版本没写过 posuser → 这次更新自然全部归位正中间，正是他要的。 */
+    var userPos = orbUserPos();
     var pos = String(ls("pos", "") || "").split(",");
     var placed = false;
-    if (pos.length === 2) {
+    if (userPos && pos.length === 2) {
       var x = parseFloat(pos[0]), y = parseFloat(pos[1]);
       if (isFinite(x) && isFinite(y)) { orbPlace(orbEl, x, y, ls("edge", "")); placed = true; }
     }
-    if (!placed) orbCenterBottom(orbEl);
+    if (!placed) orbCenter(orbEl);
     orbClamp();
   } catch (e) { errSave(ownErr(e)); }
   dragBind(orbEl, orbEl, {
     click: onOrbClick,
     longPress: function () { diagOpen(); },
-    after: function () { try { if (panelOpen) placePanel(); } catch (e2) { errSave(ownErr(e2)); } }
+    after: function () {
+      /* ★ 只有球真的被拖动过才打这个标记 —— after 只在「移动超过 4px 且松手」时触发，
+         单击 / 长按都不算。⚠ 不能写进通用 dragBind：面板拖动也走那个函数，
+         会把「拖面板」误记成「拖过球」。 */
+      lsSet("posuser", "1");
+      try { if (panelOpen) placePanel(); } catch (e2) { errSave(ownErr(e2)); }
+    }
   });
 }
 function onOrbClick() {
@@ -4010,7 +5676,7 @@ function bootTail() {
   bootStepRun("心跳", function () { vpWatch(); setInterval(tick, 2500); });
   if (!ls("tipped", "")) {
     lsSet("tipped", "1");
-    setTimeout(function () { toast("点屏幕中间底部的球打开预设管理器"); }, 700);
+    setTimeout(function () { toast("点屏幕正中间的球打开预设管理器（拖动能换位置，会记住）"); }, 700);
   }
 }
 /* ② 事件：全部集中在这儿，一步一步记名，谁炸了一眼看得见 */
@@ -4043,7 +5709,7 @@ function bindAll() {
   });
   QI("pFind").addEventListener("click", function () { findShow(!findOn); });
   QI("fclear").addEventListener("click", function () { findClear(); });
-  QI("finp").addEventListener("input", function (e) { findSet(e.target.value); });
+  QI("finp").addEventListener("input", function (e) { findSet(e.target.value); autogrow(e.target, 56); });
   QI("finp").addEventListener("keydown", function (e) {
     if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); }
   });
@@ -4089,7 +5755,43 @@ function bindAll() {
     /* 全屏编辑页自己的两个按钮：返回（写好并退出）/ 完成 */
     if ((h = hit("data-shback"))) { finishEdit(); return; }
     if ((h = hit("data-shok"))) { finishEdit(); toast("已保存"); return; }
+    /* 编辑页查找条 —— 全部走 data-fact，别用 id 判（重渲染后 id 一样但节点换了） */
+    if ((h = hit("data-fact"))) {
+      var fk = h.getAttribute("data-fact");
+      if (fk === "open") { fBar.on = true; sheetRender(); fBoot("edit"); return; }
+      if (fk === "close") { fBar.on = false; fMode = "edit"; sheetRender(); fRecalc(0, true); return; }
+      if (fk === "prev") { fJump(-1); return; }
+      if (fk === "next") { fJump(1); return; }
+      if (fk === "rep") { fReplaceOne(); return; }
+      if (fk === "repall") { fReplaceAll(); return; }
+      if (fk === "undo") { fUndoDo(); return; }
+    }
+    /* 查看态点正文 → 切编辑态（滚动位置带过去，光标落在当前命中处，键盘起来） */
+    if (fMode === "view" && t && t.closest && t.closest("#tview")) { fSetMode("edit", true); return; }
+    /* 快捷输入行：「复制 · 条目内容」 */
+    if ((h = hit("data-pcopy"))) { pCopyBody(); return; }
+    /* 列表底部：整体替换 / 撤销 */
+    if ((h = hit("data-pbulk"))) { pBulkOpen(); return; }
+    if ((h = hit("data-pundo"))) { pUndoDo(); return; }
     if ((h = hit("data-errcopy"))) { errCopy(); return; }
+    /* 截图设置页：开关 / 格式 / 底色 / 美化主题（清晰度滑条走 input 委托） */
+    if ((h = hit("data-shotsw"))) { shotCfg.on = !shotCfg.on; shotSave(); shotApply(); renderList(); toast(shotCfg.on ? "消息截图已开启" : "消息截图已停用"); return; }
+    if ((h = hit("data-shotfmt"))) { shotCfg.fmt = h.getAttribute("data-shotfmt"); shotSave(); renderList(); return; }
+    if ((h = hit("data-shotbg"))) {
+      shotCfg.bg = (h.getAttribute("data-shotbg") === "night") ? "night" : "day";
+      shotSave(); shotApply(); renderList();
+      toast(shotCfg.bg === "night" ? "已切夜间黑底" : "已切日间白底"); return;
+    }
+    if ((h = hit("data-shotthm"))) {
+      shotCfg.thm = h.getAttribute("data-shotthm"); shotSave(); shotApply(); renderList();
+      toast(shotCfg.thm ? "美化已换——现在聊天的样子就是截下来的样子" : "已恢复原样"); return;
+    }
+    /* 出图记录：失败时他要能把报错发给我，所以整段（含环境）一次复制走 */
+    if ((h = hit("data-shotlogcopy"))) { copyTextTo(shotLogText(), "日志已复制 —— 直接发给 AI 就行"); return; }
+    if ((h = hit("data-shotlogclr"))) {
+      try { lsSet(SHOT_LOGK, ""); } catch (eCLR) {}
+      renderList(); toast("出图记录已清空"); return;
+    }
     /* 跨书搜出来的结果：整行都是「进那本书并定位」 */
     if ((h = hit("data-hit"))) { wbHitGo(h.getAttribute("data-hit")); return; }
     /* 世界书两级：进书 / 返回分类 —— 书行上同时还有 pin、整本开关，所以先断定进书签 */
@@ -4098,6 +5800,10 @@ function bindAll() {
     if ((h = hit("data-pin"))) { wbPin(h.getAttribute("data-pin")); return; }
     if ((h = hit("data-grpadd"))) { wbGroupAdd(); return; }
     if ((h = hit("data-grpdel"))) { wbGroupDel(h.getAttribute("data-grpdel")); return; }
+    /* 世界书新建：一级建书 / 书里建条目
+       ⚠ 排在 data-bdel 前面也没关系，属性不同互不干扰；但必须在 data-grpsel 之前 */
+    if ((h = hit("data-wbnew"))) { wbNewBook(); return; }
+    if ((h = hit("data-wentadd"))) { wbAddEntry(); return; }
     if ((h = hit("data-bdel"))) { wbDelete(h.getAttribute("data-bdel")); return; }
     /* 预设底部工具行 + 排序 / 分组（这些必须排在 data-gh 折叠前面，同 data-bsw 道理） */
     if ((h = hit("data-padd"))) { pAddEntry(); return; }
@@ -4176,9 +5882,13 @@ function bindAll() {
   if (shEl) shEl.addEventListener("change", onChangeCommon);
   /* 拖动排序：把手上的 pointerdown（比 click 早，拖动不触发 click） */
   panelEl.addEventListener("pointerdown", dragStart);
-  /* 收录弹框里的按钮 + 切换预设列表（弹框不在 panel 里，得单独委托） */  QI("dlgM").addEventListener("click", function (e) {
-    var t = e.target && e.target.closest ? e.target.closest("[data-pginto],[data-pgnewok],[data-preset]") : null;
+  /* 收录弹框里的按钮 + 切换预设列表 + 整体替换的分类（弹框不在 panel 里，得单独委托） */
+  QI("dlgM").addEventListener("click", function (e) {
+    var t = e.target && e.target.closest
+      ? e.target.closest("[data-pginto],[data-pgnewok],[data-preset],[data-bw],[data-bk]") : null;
     if (!t) return;
+    if (t.hasAttribute("data-bw")) { bulkW = t.getAttribute("data-bw"); pBulkTip(); return; }
+    if (t.hasAttribute("data-bk")) { bulkK = t.getAttribute("data-bk"); pBulkTip(); return; }
     if (t.hasAttribute("data-preset")) { dlgClose(); presetSwitch(t.getAttribute("data-preset")); return; }
     if (t.hasAttribute("data-pginto")) { dlgClose(); pgDoInto(t.getAttribute("data-pginto")); return; }
     var inp = QI("pgnewnm");
@@ -4186,15 +5896,30 @@ function bindAll() {
     if (!nm) { toast("先写个组名"); if (inp) inp.focus(); return; }
     dlgClose(); pgDoInto("__new__", nm);
   });
+  /* 整体替换弹窗里的「查找」框：跟手长高 + 换词当场重算几条几处 */
+  QI("dlgM").addEventListener("input", function (e) {
+    if (e.target && e.target.id === "bkOld") { autogrow(e.target, 64); pBulkTip(); }
+  });
   var onInputCommon = function (e) {
     var t = e.target; if (!t || !t.getAttribute) return;
     var id, cnt, sc;
+    /* 截图清晰度滑条：改完存起来，图标上立刻按新清晰度截 */
+    if (t.id === "shotDpi") {
+      shotCfg.dpi = Math.min(4, Math.max(1, parseFloat(t.value) || 3));
+      var sv = QI("shotDpiV"); if (sv) sv.textContent = shotCfg.dpi.toFixed(1) + "×";
+      shotSave(); return;
+    }
+    /* 编辑页查找 / 替换框：跟着长高，并且边打边重算命中 */
+    if (t.id === "fq") { fBar.q = t.value; autogrow(t, 52); fRecalc(0); return; }
+    if (t.id === "fr") { fBar.r = t.value; autogrow(t, 52); return; }
     if ((id = t.getAttribute("data-ta"))) {
       sc = edScope(id); if (!sc) return;
       cnt = sc.querySelector('[data-cnt="' + id + '"]');
       if (cnt) cnt.textContent = fmt(tokOf(String(t.value))) + " tok";
       if (draft) draft.content = t.value; else if (editingId) harvestDraft(true);
       autoSave();                                     /* 停下打字就写回去 */
+      /* 预设编辑页开着查找条：只刷计数 / mini 那行字，别把滚动位置拽走 */
+      if (edWhich === "p" && editingId === id && fBar.on) fRecalc(fBar.hi, true);
       return;
     }
     if (t.getAttribute("data-nm")) {
@@ -4236,6 +5961,11 @@ function bindAll() {
   };
   panelEl.addEventListener("keydown", onKeyCommon);
   if (shEl) shEl.addEventListener("keydown", onKeyCommon);
+  });
+  /* 消息截图：只在真酒馆里挂（有 SillyTavern 才动主文档；预览页/测试不碰） */
+  bootStepRun("消息截图", function () {
+    if (!pwin || !pwin.SillyTavern) return;
+    shotApply();
   });
   /* 点面板外面收起 */
   bootStepRun("点外面收起", function () {
