@@ -27,9 +27,21 @@
   ]
  },
  "manager": {
-  "version": "v2.1",
+  "version": "v2.2",
   "file": "script/pm.js",
   "changelog": [
+   "预设管理器 v2.2：修「正文里的图截不进去」——真凶是影子盒子（只改 script/pm.js，预设 v3.4 与状态球 v2.9 都没动）",
+   "★★ 真因：柏宝绘（ST-BaiBai-Image）把卡片挂在 .mes_text 的锚点上，",
+   "   但整套图渲染在 attachShadow({mode:'open'}) 里面（源码 src/floor/hydrate.ts:78）。",
+   "   cloneNode / querySelectorAll / XMLSerializer 三样都不进 shadow root，于是：",
+   "   ① 搜到 0 张图 → 不报「有 N 张图没画进去」；② SVG 里一个 <img> 都没有。",
+   "   之前改压缩、改 foreignObject 全是白改 —— 图从来没进过 SVG。电脑手机一样中招。",
+   "★ 修法：克隆之后按索引一一对应，把每个 shadow root 里的 <style>（:host 换成自己的类名）",
+   "  和所有子节点抄进一个普通 <div>，再做清理和压缩内联。卡片外框尽量保原样。",
+   "★ 安全阀：两边结构对不上就整段放弃 —— 宁可不截，也不把 A 楼的图贴到 B 楼。",
+   "★ 诊断日志保留：img / svg / canvas / iframe / 背景图 / shadow 数量 + SVG 里带几个 <img>。",
+   "→ 更新后重开酒馆，再截那张有图的消息试试。",
+   "—— 以下为 v2.1 ——",
    "预设管理器 v2.1：加「截图诊断」（本次只改 script/pm.js，预设 v3.4 与状态球 v2.9 都没动）",
    "他 2026-11-13 23:31 报：正文里的 AI 生成图截不进去，提示里却没有「有 N 张图没画进去」——",
    "即 failN=0，代码认为这条消息里压根没有可处理的图（气泡里明明有）。这版不瞎改截图逻辑，",

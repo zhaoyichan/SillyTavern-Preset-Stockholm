@@ -180,7 +180,7 @@
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v2.1";
+var APP = "预设管理器", VER = "v2.2";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -1741,6 +1741,8 @@ function mount() {
       cfg: shotCfg, apply: function () { if (pwin && pwin.SillyTavern) shotApply(); },
       scale: shotScale, clean: shotClean, buildSVG: shotBuildSVG,
       mesText: shotMesText, who: shotWho, css: SHOT_CSS,
+      /* v2.2：shadow 展开 + DOM 诊断（柏宝绘那类影子盒子不搬出来就永远是 0 张图） */
+      shadow: shotShadowInline, dump: shotDomDump,
       /* v1.8：签名多了 mes（要用原节点的真实尺寸锁图宽高）；两参老调法照样能用 */
       inline: function (a, b, c) {
         return (typeof b === "function") ? shotInline(null, a, b) : shotInline(a, b, c);
@@ -5120,6 +5122,12 @@ function shotDomDump(mes) {
   try { o.push("svg=" + mes.querySelectorAll("svg").length); } catch (e1) {}
   try { o.push("canvas=" + mes.querySelectorAll("canvas").length); } catch (e2) {}
   try { o.push("iframe=" + mes.querySelectorAll("iframe").length); } catch (e3) {}
+  /* shadow 数量：柏宝绘的卡片就藏在里面 —— 有 shadow 而 img=0，基本就是它 */
+  try {
+    var sh = 0, all2 = mes.querySelectorAll("*"), lim2 = Math.min(all2.length, 300);
+    for (var q = 0; q < lim2; q++) { try { if (all2[q].shadowRoot) sh++; } catch (e6) {} }
+    o.push("shadow=" + sh + (lim2 < all2.length ? "(扫前" + lim2 + ")" : ""));
+  } catch (e7) {}
   /* 背景图：AI 生图插件很爱用 background-image 贴图（那样 <img> 数量就是 0） */
   try {
     var bg = 0, all = mes.querySelectorAll("div,span,p,a,i,b,section"), lim = Math.min(all.length, 80);
@@ -5622,6 +5630,75 @@ function shotScale(w, h) {
 /* 克隆体上的清理：按钮、脚本、输入框这些不该出现在图里。
    ★ 小剧场那份只清了 button —— 酒馆的 .mes_buttons（编辑/删除/继续）一整排会进图，
      我们自己的截图/复制图标也会进图，所以这两个必须一起清掉。 */
+/* ── 展开 Shadow DOM（v2.2，真凶就在这儿）────────────────────────────
+   ★★ 他 2026-11-13 23:31 报「正文有图、截出来只有文字」，查了两轮：
+      柏宝绘（baibai-git/ST-BaiBai-Image）把卡片挂在 .mes_text 里一个锚点上，
+      整套图渲染在 `anchor.attachShadow({mode:'open'})` 里面
+      （源码 src/floor/hydrate.ts 第 78 行，锚点选择器 BBI_SLOT_SELECTOR）。
+   ★ 为什么以前怎么修都不管用：cloneNode / querySelectorAll / XMLSerializer
+     这三样**都不会进 shadow root**，所以：
+       · querySelectorAll('img') 搜到 0 张 → failN=0 → 提示里不报「图没画进去」
+       · 序列化出来的 SVG 里一个 <img> 都没有 → 图从来没进过 SVG，
+         不是「画不出来」，改压缩参数、改 foreignObject 全是白改。
+     电脑和手机一样中招，跟 WebView 无关（之前当成手机问题猜了一轮）。
+   ★ 修法：克隆完之后按索引一一对应（cloneNode 保证子节点顺序完全一致），
+     凡是原节点有 shadowRoot 的，就在克隆体对应位置挖一个普通 <div>，
+     把 shadow 里的 <style>（:host 改成我们的类名）+ 所有子节点抄进去。
+     ⚠ 必须在 shotClean 之前跑：抄进来的 <img> 要留给 shotInline 去压缩内联。
+     ⚠ 只认 open 模式 —— closed 的 el.shadowRoot 恒为 null，拿不到，只能放过。 */
+function shotShadowInline(mes, cl) {
+  var src = null, dst = null, n = 0, i;
+  try {
+    src = mes.querySelectorAll("*");
+    dst = cl.querySelectorAll("*");
+    /* 结构对不上就别硬塞 —— 位置错开比漏图更糟（会把 A 的图贴到 B 的楼里） */
+    if (!src.length || src.length !== dst.length) return 0;
+  } catch (e) { return 0; }
+  for (i = 0; i < src.length; i++) {
+    var sr = null;
+    try { sr = src[i].shadowRoot; } catch (e1) { sr = null; }
+    if (!sr) continue;
+    try {
+      var box = pdoc.createElement("div");
+      box.className = "sk-shd-host";
+      box.style.cssText = "display:block;width:100%;box-sizing:border-box;";
+      var k, sts = sr.querySelectorAll("style");
+      for (k = 0; k < sts.length; k++) {
+        var st = pdoc.createElement("style");
+        /* :host 在普通 DOM 里没人认 → 换成我们自己的类名，卡片外框才不至于全塌 */
+        st.textContent = String(sts[k].textContent || "").replace(/:host\b/g, ".sk-shd-host");
+        box.appendChild(st);
+      }
+      /* 有的打包器不写 <style>，而是塞 adoptedStyleSheets —— 一样得抄 */
+      try {
+        var ad = sr.adoptedStyleSheets || [];
+        for (k = 0; k < ad.length; k++) {
+          var cw = "", rules = ad[k].cssRules || [];
+          for (var r = 0; r < rules.length; r++) cw += rules[r].cssText + "\n";
+          if (cw) {
+            var st2 = pdoc.createElement("style");
+            st2.textContent = cw.replace(/:host\b/g, ".sk-shd-host");
+            box.appendChild(st2);
+          }
+        }
+      } catch (e4) {}
+      var kids = sr.childNodes;
+      for (k = 0; k < kids.length; k++) {
+        var nd = kids[k];
+        if (nd.nodeType === 1 && String(nd.tagName).toLowerCase() === "style") continue;
+        box.appendChild(nd.cloneNode(true));
+      }
+      /* shadow 内容不参与父级布局，锚点本身可能是 0×0 —— 按原位实宽兜一下 */
+      try {
+        var rc = src[i].getBoundingClientRect();
+        if (rc && rc.width > 2) box.style.width = Math.round(rc.width) + "px";
+      } catch (e5) {}
+      dst[i].appendChild(box);
+      n++;
+    } catch (e3) {}
+  }
+  return n;
+}
 function shotClean(cl) {
   var ns = cl.querySelectorAll("button,.mes_buttons,.sk-shot-ops,script,style,noscript,"
     + "iframe,video,audio,textarea,input,select,svg");
@@ -6005,10 +6082,13 @@ function shotDo(mes) {
   toast("正在截图…");
   var done = function () { shotState.busy = false; };
   var cl = mes.cloneNode(true);
+  /* ★ v2.2：必须在 shotClean / shotInline 之前展开 shadow —— 柏宝绘的图全在里面，
+     不搬出来后面两个函数都当它不存在（这就是「提示成功、图上却没图」的真凶）。 */
+  var shdN = shotShadowInline(mes, cl);
   shotClean(cl);
   /* ★ v2.1 诊断：先把这条消息的真实结构记下来（img / svg / canvas / 背景图各几个），
      再记「克隆体里找到了几张、压缩成功几张」。他截一张图，日志里就有现场。 */
-  shotLog("诊断", shotDomDump(mes));
+  shotLog("诊断", shotDomDump(mes) + " shadow展开=" + shdN);
   shotInline(mes, cl, function (failN, okN, total) {
       /* ★ 图没画进去要如实说（v1.8）：闷声少几张，他会以为「截图又没带着图」 */
       shotState.imgFail = failN || 0;
