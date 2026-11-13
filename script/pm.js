@@ -180,7 +180,7 @@
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v2.0";
+var APP = "预设管理器", VER = "v2.1";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -5093,6 +5093,46 @@ function shotSave() { lsSetJSON("shot", shotCfg); }
      复制整段发给我。环形 20 条，不占地方。
    ⚠ 只记文字（时间 + 事件 + 一句话），绝不记图片本身 —— 图片塞 localStorage 会撑爆。 */
 var SHOT_LOGK = "shotlog", SHOT_LOGN = 20;
+/* ── 截图诊断（v2.1，专门为「正文有图、截出来只有文字」加的）────────────
+   他 2026-11-13 23:31 报：正文里的 AI 生成图截不进去，但提示里**没有**
+   「有 N 张图没画进去」—— 也就是 failN=0，代码认为这张消息里压根没有可处理的图。
+   气泡里明明有图、代码却说没有，只可能是这几种：
+     ① 图不是 <img>（是 <svg>/<canvas>/背景图，或某个插件自己画的）
+     ② 图在 .mes 之外（克隆 .mes 时带不上）
+     ③ <img> 存在但 src 是空的 / 指向一个还没加载的懒加载占位
+   这几种在真机上长得完全不一样，读代码永远猜不出来（老教训 #2：11-04 猜错两次）。
+   所以把那条消息的 DOM 结构原样写进日志，他点「复制日志」发过来就能一眼分岔。
+   ⚠ 只读不写：不改 DOM、不删节点，测完对他聊天没有任何影响。 */
+function shotDomDump(mes) {
+  var o = [];
+  try {
+    var imgs = mes.querySelectorAll("img");
+    o.push("img=" + imgs.length);
+    for (var i = 0; i < Math.min(imgs.length, 4); i++) {
+      var s = String(imgs[i].getAttribute("src") || "");
+      var kind = /^data:/i.test(s) ? "data" : (/^blob:/i.test(s) ? "blob"
+        : (/^https?:|^\//i.test(s) ? "url" : (s ? "rel" : "空")));
+      var nw = 0, nh = 0;
+      try { nw = imgs[i].naturalWidth || 0; nh = imgs[i].naturalHeight || 0; } catch (e0) {}
+      o.push("i" + i + "[" + kind + "|" + s.length + "|" + nw + "x" + nh + "]");
+    }
+  } catch (e) {}
+  try { o.push("svg=" + mes.querySelectorAll("svg").length); } catch (e1) {}
+  try { o.push("canvas=" + mes.querySelectorAll("canvas").length); } catch (e2) {}
+  try { o.push("iframe=" + mes.querySelectorAll("iframe").length); } catch (e3) {}
+  /* 背景图：AI 生图插件很爱用 background-image 贴图（那样 <img> 数量就是 0） */
+  try {
+    var bg = 0, all = mes.querySelectorAll("div,span,p,a,i,b,section"), lim = Math.min(all.length, 80);
+    for (var j = 0; j < lim; j++) {
+      try {
+        var bi = pwin.getComputedStyle(all[j]).backgroundImage || "";
+        if (bi.indexOf("url(") >= 0) bg++;
+      } catch (e4) {}
+    }
+    o.push("bg=" + bg);
+  } catch (e5) {}
+  return o.join(" ");
+}
 function shotLogs() { var a = lsJSON(SHOT_LOGK, []); return (a && a.push) ? a : []; }
 function shotLog(tag, txt) {
   try {
@@ -5655,8 +5695,8 @@ function shotInline(mes, cl, cb) {
   var n = imgs.length;
   var srcs = null;
   try { srcs = mes ? mes.querySelectorAll("img") : null; } catch (e) {}
-  var left = n, fin = false, failN = 0;
-  function go() { if (fin) return; fin = true; clearTimeout(tm); cb(failN); }
+  var left = n, fin = false, failN = 0, okN = 0;
+  function go() { if (fin) return; fin = true; clearTimeout(tm); cb(failN, okN, n); }
   var tm = setTimeout(go, 15000);            /* 总量兜底：再慢也不能把人晾着 */
   if (!n) { go(); return; }
 
@@ -5681,6 +5721,7 @@ function shotInline(mes, cl, cb) {
     if (!src) { if (--left <= 0) go(); return; }
     shotImgData(src, function (u) {
       if (u) {
+        okN++;
         im.setAttribute("src", u);
         im.removeAttribute("loading");       /* dataURL 不需要懒加载，留着反而可能不画 */
         /* 尺寸按压缩后的真实比例重算一次（裁剪框 / object-fit 都不会变形） */
@@ -5833,12 +5874,17 @@ function shotRaster(mes, cl, ok, fail) {
     var h = Math.max(120, host.scrollHeight || 300);
     var svg = shotBuildSVG(cl, w, h);
     host.remove(); host = null;
+    /* ★ v2.1 诊断：SVG 里到底带了几个 <img> —— 这一条能把两条路彻底分开：
+       「SVG 里 img=0」→ 克隆时就丢了图（DOM 结构问题）；
+       「SVG 里 img>0 但成图没图」→ 图进去了、画不出来（foreignObject 渲染问题）。 */
+    shotLog("SVG", "画布 " + w + "x" + h + "，字符串 " + Math.round(svg.length / 1024)
+      + "KB，里面 img=" + ((svg.match(/<img[\s/>]/gi) || []).length));
 
     /* ★ 不再直接调 createObjectURL：他的 WebView 上没有这个函数（真机日志实锤） */
     var ref = shotSvgSrc(svg);
     var img = new pwin.Image(), fin = false;
     var clear = function () { try { ref.clear(); } catch (e) {} };
-    var lose = function () { if (fin) return; fin = true; clear(); fail(); };
+    var lose = function () { if (fin) return; fin = true; clear(); shotLog("SVG失败", "img.onerror / 超时（SVG " + Math.round(svg.length / 1024) + "KB）"); fail(); };
     img.onload = function () {
       if (fin) return;
       try {
@@ -5960,9 +6006,14 @@ function shotDo(mes) {
   var done = function () { shotState.busy = false; };
   var cl = mes.cloneNode(true);
   shotClean(cl);
-  shotInline(mes, cl, function (failN) {
+  /* ★ v2.1 诊断：先把这条消息的真实结构记下来（img / svg / canvas / 背景图各几个），
+     再记「克隆体里找到了几张、压缩成功几张」。他截一张图，日志里就有现场。 */
+  shotLog("诊断", shotDomDump(mes));
+  shotInline(mes, cl, function (failN, okN, total) {
       /* ★ 图没画进去要如实说（v1.8）：闷声少几张，他会以为「截图又没带着图」 */
       shotState.imgFail = failN || 0;
+      shotLog("图", "克隆体 img=" + (total || 0) + " 张：压缩成功 " + (okN || 0)
+        + " / 失败 " + (failN || 0) + "；原始图数=" + ((mes.querySelectorAll("img") || {}).length || 0));
       shotRaster(mes, cl, function (blob, sc) {
       done(); shotSaveBlob(mes, blob, sc);
     }, function () {
