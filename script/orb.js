@@ -804,17 +804,23 @@ var HOOK={
     }).catch(function(e){ cb(false,null,(e&&e.message)||String(e)); });
   },
 
-  /* 脚本本体整段替换：写回全局脚本库 + 当前预设里嵌的那份 */
+  /* 脚本本体整段替换：写回全局脚本库 + 当前预设里嵌的那份
+     ★ v2.9：写完必须读回来核对（跟管理器 v2.0 同一条教训 #45）。
+       写入本身早就走 updateScriptTreesWith（走的是酒馆助手 store，不是
+       extension_settings 那份投影），但以前只要 run() 没抛异常就报「已更新」——
+       万一 store 没真落下（例如同名条目被别的逻辑顶回去），用户看到的还是
+       「提示成功、重启旧版」。现在读回 getScriptTrees：内容不是新的就报失败，
+       不许再给一句漂亮的假话。 */
   applyScript:function(text,cb){
     var c=call("updateScriptTreesWith");
     if(!c){ cb(false,"找不到 updateScriptTreesWith（酒馆助手版本太旧，请手动导入脚本文件）"); return; }
-    var SNAME="斯德哥尔摩·状态球", hits={n:0};
+    var SNAME="斯德哥尔摩·状态球", hit={g:0,p:0}, cur="";
     function clone(o){ var x={}, k;
       for(k in o) if(Object.prototype.hasOwnProperty.call(o,k)) x[k]=o[k];
       return x; }
     function one(s){
       if(!s || s.name!==SNAME) return s;
-      hits.n++;
+      if(cur==="global") hit.g++; else hit.p++;
       var o=clone(s);
       o.content=text; o.enabled=true; o.type="script";
       return o;
@@ -826,12 +832,53 @@ var HOOK={
         return one(t);
       });
     }
+    /* 从一棵脚本树里挑出所有同名条目（folder 也要翻） */
+    function pickAll(trees){
+      var out=[];
+      (trees||[]).forEach(function(t){
+        if(!t) return;
+        if(t.type==="folder"){
+          (t.scripts||[]).forEach(function(x){ if(x && x.name===SNAME) out.push(x); });
+        }else if(t.name===SNAME) out.push(t);
+      });
+      return out;
+    }
+    /* 返回 ""＝校验通过，否则是失败原因 */
+    function judge(trees){
+      var arr=pickAll(trees);
+      if(!arr.length) return "写完之后读回来找不到「"+SNAME+"」";
+      for(var i=0;i<arr.length;i++){
+        var txt=String(arr[i].content||"");
+        if(Math.abs(txt.length-text.length)>2)
+          return "读回来还是旧内容（"+txt.length+" 字符，应为 "+text.length+"）";
+        if(txt.slice(0,60)!==text.slice(0,60))
+          return "读回来内容对不上（开头不一样，可能是别的脚本串了）";
+      }
+      return "";
+    }
     try{
-      var a=c.run(upd,{type:"global"});
-      var b=c.run(upd,{type:"preset"});
+      cur="global"; var a=c.run(upd,{type:"global"});
+      cur="preset"; var b=c.run(upd,{type:"preset"});
       var done=function(){
-        cb(true, hits.n ? ("脚本已更新（写入 "+hits.n+" 处），重开酒馆生效")
-                        : ("脚本库里没找到「"+SNAME+"」，已跳过（可手动导入脚本文件）"));
+        var n=hit.g+hit.p;
+        if(!n){ cb(true,"脚本库里没找到「"+SNAME+"」，已跳过（可手动导入脚本文件）"); return; }
+        var okMsg="脚本已更新（写入 "+n+" 处），重开酒馆生效";
+        var g=call("getScriptTrees");
+        /* 老版本没有 getScriptTrees → 没法校验，就别硬说失败，照旧提示成功 */
+        if(!g){ cb(true,okMsg); return; }
+        /* 校验「真正生效的那份」：global 有就查 global，只在预设里就查 preset */
+        var chk = hit.g ? "global" : "preset", res;
+        try{ res=g.run({type:chk}); }
+        catch(e){ cb(false,"脚本写入后校验出错："+((e&&e.message)||e)); return; }
+        if(res && typeof res.then==="function"){
+          res.then(function(trees){
+            var why=judge(trees);
+            cb(!why, why || okMsg);
+          }, function(e){ cb(false,"脚本写入后校验出错："+((e&&e.message)||e)); });
+          return;
+        }
+        var why=judge(res);
+        cb(!why, why || okMsg);
       };
       if(a && a.then) a.then(function(){ return b; }).then(done, function(e){ cb(false,"脚本写入失败："+e); });
       else done();
@@ -2054,7 +2101,7 @@ function claimHtml(){
      "preset": {"version":"v1.9","file":"preset/斯德哥尔摩症_v1.9.json","changelog":["…"]},
      "script": {"version":"v1.0","file":"script/斯德哥尔摩·状态球.js","changelog":["…"]}
    }                                                                        */
-var ORB_VER="v2.8";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
+var ORB_VER="v2.9";                 /* ← 本脚本自己的版本号，改这里＝改版本 */
 var REMOTE = {
   base:"https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-Stockholm/main",
   mf:null,          /* 索引 */
