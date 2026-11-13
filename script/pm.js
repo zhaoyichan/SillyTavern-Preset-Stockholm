@@ -180,7 +180,7 @@
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v2.2";
+var APP = "预设管理器", VER = "v2.3";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -5646,6 +5646,53 @@ function shotScale(w, h) {
      把 shadow 里的 <style>（:host 改成我们的类名）+ 所有子节点抄进去。
      ⚠ 必须在 shotClean 之前跑：抄进来的 <img> 要留给 shotInline 去压缩内联。
      ⚠ 只认 open 模式 —— closed 的 el.shadowRoot 恒为 null，拿不到，只能放过。 */
+/* ★★ v2.3 主图铺满正文宽度
+   他 2026-11-14 发的截图：文字满宽，图只占一半，要求「图的宽度和聊天的那些对齐」。
+   根子有两层：
+     ① 容器宽度被锁窄（见 shotShadowInline 里那段注释）—— 主因；
+     ② 卡片自己的写法是「宽跟随内容」：stage{width:fit-content} + img{width:auto;
+        max-height:var(--bbi-figure-max-h)}，高度封顶 → 宽度按比例回缩。
+        就算容器对了，只改 img 也撑不满（100% 是相对 fit-content 的父级）。
+   所以这里挑 shadow 里**面积最大**的那张当主图，把 img 和它的祖先链一路解开到 100%。
+   为什么按面积挑：卡片里还有 ⋯ 钮、翻页器、角标这些小图，一起放大就花了。
+   ⚠ 原节点在页面上、克隆体还不在，量尺寸必须用原 shadow 里的 img（同一顺序）。
+   ⚠ 数量对不上就整个放弃 —— 宁可不放大，也不能把 A 图当主图。 */
+function shotWiden(box, sr) {
+  var mine = null, org = null, k;
+  try {
+    mine = box.querySelectorAll("img");
+    org = sr.querySelectorAll("img");
+  } catch (e) { return 0; }
+  if (!mine.length || mine.length !== org.length) return 0;
+  var big = -1, area = 0;
+  for (k = 0; k < org.length; k++) {
+    var r = null;
+    try { r = org[k].getBoundingClientRect(); } catch (e2) { r = null; }
+    if (!r) continue;
+    var a = (r.width || 0) * (r.height || 0);
+    if (a > area) { area = a; big = k; }
+  }
+  if (big < 0 || area < 100) return 0;      /* 全是小图标就不动（100px² 以下当图标） */
+  var im = mine[big];
+  if (!im) return 0;
+  function S(el, p, v) { try { el.style.setProperty(p, v, "important"); } catch (e) {} }
+  S(im, "width", "100%");
+  S(im, "height", "auto");
+  S(im, "max-width", "100%");
+  S(im, "max-height", "none");
+  /* 祖先链：stage 的 fit-content、卡片定宽盒子，光改 img 都会被它们卡住 */
+  var p = im.parentElement, guard = 0;
+  while (p && p !== box && guard++ < 6) {
+    S(p, "width", "100%");
+    S(p, "max-width", "100%");
+    S(p, "min-width", "0");
+    S(p, "max-height", "none");
+    p = p.parentElement;
+  }
+  /* 标记：shotInline 的 sizeIt 看到就别再按 rect 锁 px，否则又被锁回窄的 */
+  try { im.setAttribute("data-sk-full", "1"); } catch (e3) {}
+  return 1;
+}
 function shotShadowInline(mes, cl) {
   var src = null, dst = null, n = 0, i;
   try {
@@ -5661,7 +5708,6 @@ function shotShadowInline(mes, cl) {
     try {
       var box = pdoc.createElement("div");
       box.className = "sk-shd-host";
-      box.style.cssText = "display:block;width:100%;box-sizing:border-box;";
       var k, sts = sr.querySelectorAll("style");
       for (k = 0; k < sts.length; k++) {
         var st = pdoc.createElement("style");
@@ -5688,11 +5734,16 @@ function shotShadowInline(mes, cl) {
         if (nd.nodeType === 1 && String(nd.tagName).toLowerCase() === "style") continue;
         box.appendChild(nd.cloneNode(true));
       }
-      /* shadow 内容不参与父级布局，锚点本身可能是 0×0 —— 按原位实宽兜一下 */
-      try {
-        var rc = src[i].getBoundingClientRect();
-        if (rc && rc.width > 2) box.style.width = Math.round(rc.width) + "px";
-      } catch (e5) {}
+      /* ★★ v2.3：宽度只能跟着容器走，绝不许按锚点 rect 锁 px
+         他 2026-11-14 原话：「酒馆里那个图片的宽度就和文字对齐，是你截图之后它才显得
+         没那么对齐、才只占一半」。
+         真因就是 v2.2 这里：shadow 内容不参与父级布局 → 锚点 rect 往往只有卡片真实
+         宽度的一个零头（柏宝绘的 stage 是 fit-content）。把它当兜底宽度钉成 px，
+         整个卡片就被锁窄，img{max-width:100%} 只能跟着窄一半。
+         box 是 block，width:100% 在普通流里就是父容器宽，不需要也不许量锚点。 */
+      box.style.cssText = "display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box;";
+      /* 主图强制铺满（卡片原样是 fit-content + max-height 反推宽度，不主动解开永远不满） */
+      shotWiden(box, sr);
       dst[i].appendChild(box);
       n++;
     } catch (e3) {}
@@ -5778,6 +5829,9 @@ function shotInline(mes, cl, cb) {
   if (!n) { go(); return; }
 
   function sizeIt(im, i) {
+    /* ★ v2.3：影子盒子里搬出来的主图已经强制铺满了（!important width:100%），
+       这里再按 rect 锁 px 会把它锁回窄的 —— 而且 srcs 索引本来就跟 shadow 对不上。 */
+    try { if (im.getAttribute("data-sk-full") === "1") return; } catch (e0) {}
     var se = srcs ? srcs[i] : null, r = null;
     try { r = se ? se.getBoundingClientRect() : null; } catch (e) {}
     if (!r || !(r.width > 2) || !(r.height > 2)) return;
