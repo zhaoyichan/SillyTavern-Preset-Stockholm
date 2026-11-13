@@ -180,7 +180,7 @@
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v1.9";
+var APP = "预设管理器", VER = "v2.0";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -6661,7 +6661,7 @@ var PM_RAW = "https://raw.githubusercontent.com/zhaoyichan/SillyTavern-Preset-St
 /* ⚠ 这里只写键名本体，ls/lsSet 会自动加 PFX("sk_pm_") 前缀 ——
    写成 "sk_pm_bak" 实际落盘的是 "sk_pm_sk_pm_bak"，事后自己去 localStorage 翻会找不到。 */
 var PM_BAK = "bak";
-var updSt = { st: "idle", ver: "", file: "script/pm.js", chg: [], err: "", busy: false };
+var updSt = { st: "idle", ver: "", file: "script/pm.js", chg: [], err: "", msg: "", busy: false };
 function vcmp(a, b) {
   var pa = String(a || "").replace(/^v/i, "").split("."), pb = String(b || "").replace(/^v/i, "").split(".");
   var n = Math.max(pa.length, pb.length);
@@ -6704,9 +6704,122 @@ function pmEntry() {
     return { e: arr[pick], ctx: c, n: arr.length };
   } catch (e) { return { err: "读脚本库出错：" + ((e && e.message) || e) }; }
 }
+/* ── 写回脚本库：必须走酒馆助手自己的 store（v2.0，最要命的一次修复）───────
+   ★★★ 他 2026-11-13 报：「能更新啊，但更新完我重启酒馆还是原来那个样子」。
+   真因（翻 JS-Slash-Runner 源码 src/store/settings/global.ts 逐行确认）：
+     酒馆助手 4.x 把全局脚本搬进了 pinia store ——
+       const settings = ref(getSettings());      // zod parse = 深拷贝出来的副本
+       watch(settings, s => { _.set(extension_settings,'tavern_helper',klona(s));
+                              saveSettingsDebounced(); }, {deep:true});
+     【真正在跑、真正会被存盘的是 store 里那份副本】，
+     而 SillyTavern.getContext().extensionSettings.tavern_helper.script.scripts
+     只是它的投影。我们以前直接改投影里那条的 content，于是：
+       ① 正在跑的 iframe 不会变；
+       ② store 只要有任何一次变化（开关一个脚本、改个设置），deep watch 就把
+          旧副本 _.set 回去，把我们写的冲掉；
+       ③ 最终存盘的还是旧内容 —— 重启当然「还是原来那个样子」。
+   ★ 正确路径 = 酒馆助手暴露的 updateScriptTreesWith(fn, {type})：
+     它改的就是那个 store，watch 顺手把 extension_settings 和磁盘一起写对。
+     状态球（另一个酒馆助手脚本）一直这么更新 —— 他让我「看看别人的」就是指这个。
+   ★ 写完必须读回来校验（getScriptTrees）：拿不到新版就报失败，不许报成功（教训 #45）。
+   ★ 两份都写：type:"global" 是全局脚本库那条；type:"preset" 是预设里注入的那份
+     （预设内嵌的脚本会在切换预设时生效，只写 global 会出现「换个预设又变回旧版」）。 */
+function pmApi(name) {
+  var cands = [];
+  try { cands.push(pwin); } catch (e0) {}
+  try { cands.push(pwin.TavernHelper); } catch (e1) {}
+  try { cands.push(pwin.SillyTavern); } catch (e2) {}
+  try { cands.push(window); } catch (e3) {}
+  for (var i = 0; i < cands.length; i++) {
+    try {
+      var o = cands[i];
+      if (o && typeof o[name] === "function") return { fn: o[name], owner: o };
+    } catch (e4) {}
+  }
+  return null;
+}
+/* 在一棵脚本树里找「该改的那一条」：
+   先按 id（精确，不会误伤脚本库里 4 条同名历史条目），再按 name+enabled，最后按 name。 */
+function pmTreePick(trees, id) {
+  var all = [], i, j;
+  for (i = 0; i < (trees || []).length; i++) {
+    var t = trees[i]; if (!t) continue;
+    if (t.type === "folder") {
+      for (j = 0; j < (t.scripts || []).length; j++) if (t.scripts[j]) all.push(t.scripts[j]);
+    } else all.push(t);
+  }
+  if (id) for (i = 0; i < all.length; i++) if (all[i].id === id && all[i].name === APP) return all[i];
+  for (i = 0; i < all.length; i++) if (all[i].name === APP && all[i].enabled) return all[i];
+  for (i = 0; i < all.length; i++) if (all[i].name === APP) return all[i];
+  return null;
+}
+/* 返回 {ok, msg}。cb 一定被调一次。 */
+function pmWriteScript(code, ver, cb) {
+  var g = pmEntry();
+  var id = (g && g.e && g.e.id) || "";
+  var oldInfo = String((g && g.e && g.e.info) || "");
+  /* ⚠ 这里必须 new RegExp：直接把 "\\s*" 当字符串传给 replace 会被当成字面量，
+     一个都匹配不到（info 里永远留着旧版本号，他就以为没更新）。 */
+  var newInfo = oldInfo.indexOf(APP + " v") >= 0
+    ? oldInfo.replace(new RegExp(APP + "\\s*v[\\d.]+"), APP + " " + (ver || ""))
+    : (APP + " " + (ver || "") + (oldInfo ? "：" + oldInfo : ""));
+  var upd = pmApi("updateScriptTreesWith"), get = pmApi("getScriptTrees");
+  var hit = 0, errs = [], types = [];
+
+  if (upd) {
+    ["global", "preset"].forEach(function (type) {
+      try {
+        var got = false;
+        upd.fn.call(upd.owner, function (trees) {
+          var t = pmTreePick(trees, id);
+          if (t) { t.content = code; if (newInfo) t.info = newInfo; got = true; }
+          return trees;
+        }, { type: type });
+        if (got) { hit++; types.push(type === "global" ? "全局" : "预设"); }
+      } catch (e) { errs.push(type + "：" + ((e && e.message) || e)); }
+    });
+  }
+  /* 读回校验：store 里必须真的是新内容才算成功 */
+  var why = "";
+  if (get) {
+    try {
+      var trees = get.fn.call(get.owner, { type: "global" });
+      var t2 = pmTreePick(trees, id);
+      if (!t2) why = "写完之后读回来找不到这一条";
+      else {
+        var txt = String(t2.content || "");
+        var okLen = Math.abs(txt.length - code.length) <= 2;
+        var okVer = !ver || txt.indexOf('VER = "' + ver + '"') >= 0;
+        if (!okLen || !okVer) why = "读回来还是旧内容（" + txt.length + " 字符，应为 " + code.length + "）";
+      }
+    } catch (e5) { why = "校验出错：" + ((e5 && e5.message) || e5); }
+  }
+
+  if (!why && hit) {
+    cb(true, "已写入" + (types.length ? "（" + types.join(" + ") + "）" : "") + "，重开酒馆生效");
+    return;
+  }
+  /* API 走不通 → 退回老写法（老版酒馆助手没这个 API）。能不能生效就听天了，但至少不留假成功 */
+  if (!hit) {
+    try {
+      if (g && g.e) {
+        g.e.content = code;
+        if (newInfo) g.e.info = newInfo;
+        var saved = false;
+        try { if (g.ctx && typeof g.ctx.saveSettingsDebounced === "function") { g.ctx.saveSettingsDebounced(); saved = true; } } catch (e6) {}
+        if (!saved) { try { if (typeof pwin.saveSettingsDebounced === "function") { pwin.saveSettingsDebounced(); saved = true; } } catch (e7) {} }
+        if (!saved) { cb(false, "下载好了，但存不进酒馆设置 —— 去电脑上用导入件更新"); return; }
+        cb(true, "已写入（兼容写法：你的酒馆助手版本较老，没有 updateScriptTreesWith）");
+        return;
+      }
+    } catch (e8) { errs.push("兼容写法：" + ((e8 && e8.message) || e8)); }
+  }
+  cb(false, why || ("写不进脚本库" + (errs.length ? "：" + errs[0] : "")));
+}
+
 function updCheck(cb) {
   if (updSt.busy) return;
-  updSt = { st: "checking", ver: "", file: "script/pm.js", chg: [], err: "", busy: true };
+  updSt = { st: "checking", ver: "", file: "script/pm.js", chg: [], err: "", msg: "", busy: true };
   renderList();
   updFetch(PM_RAW + "/update.json", function (ok, txt, err) {
     updSt.busy = false;
@@ -6742,32 +6855,20 @@ function updInstall() {
       updSt.st = "fail"; updSt.err = err || "下下来的脚本不完整";
       renderList(); return;
     }
+    /* ★ 先备份当前内容（回滚用）。备份从脚本库取，不从 store 取 —— 两边内容一样，
+       但 store 那份可能还没同步，脚本库这条才是他正在跑的那份。 */
     var oldC = String(g.e.content || "");
     try { lsSet(PM_BAK, JSON.stringify({ v: VER, c: oldC, t: Date.now() })); } catch (eB) {}
-    g.e.content = code;
-    /* info 里的版本号跟着改，不然脚本库里显示的还是旧版（他看版本就看这个） */
-    try {
-      g.e.info = String(g.e.info || "").replace(/预设管理器\s*v[\d.]+/, "预设管理器 " + updSt.ver);
-    } catch (eI) {}
-    var saved = false;
-    try {
-      if (g.ctx && typeof g.ctx.saveSettingsDebounced === "function") { g.ctx.saveSettingsDebounced(); saved = true; }
-    } catch (e1) {}
-    if (!saved) {
-      try {
-        if (typeof pwin.saveSettingsDebounced === "function") { pwin.saveSettingsDebounced(); saved = true; }
-      } catch (e2) {}
-    }
-    if (!saved) {
-      /* ★ 存不进去就把内存改回去（教训 #45：覆盖 ≠ 生效） */
-      g.e.content = oldC;
-      updSt.st = "fail";
-      updSt.err = "脚本下载好了，但存不进酒馆设置（酒馆版本不让脚本写设置）—— 去电脑上用导入件更新";
-      renderList(); return;
-    }
-    updSt.st = "done";
-    renderList();
-    toast("已更新到 " + updSt.ver + " —— 重开酒馆生效");
+    /* ★★ 写回必须走酒馆助手的 store（见 pmWriteScript 上面那段长注释）——
+       以前直接改 extensionSettings 里那条，会被 store 的 deep watch 覆盖回去，
+       于是「提示更新成功、重启还是旧版」。 */
+    pmWriteScript(code, updSt.ver, function (ok, msg) {
+      updSt.st = ok ? "done" : "fail";
+      updSt.err = ok ? "" : (msg || "写入失败");
+      updSt.msg = ok ? (msg || "") : "";
+      renderList();
+      if (ok) toast("已更新到 " + updSt.ver + " —— " + (msg || "重开酒馆生效"));
+    });
   });
 }
 /* 回滚：只有备份的版本跟当前版本不一样时才给这个按钮 */
@@ -6779,16 +6880,14 @@ function updBak() {
 }
 function updRollback() {
   var b = updBak(); if (!b) { toast("没有可回滚的版本"); return; }
-  var g = pmEntry();
-  if (g.err) { toast(g.err); return; }
-  g.e.content = b.c;
-  try { g.e.info = String(g.e.info || "").replace(/预设管理器\s*v[\d.]+/, "预设管理器 " + b.v); } catch (e) {}
-  var okS = false;
-  try { if (g.ctx && typeof g.ctx.saveSettingsDebounced === "function") { g.ctx.saveSettingsDebounced(); okS = true; } } catch (e1) {}
-  if (!okS) { toast("存不进去 —— 只能手动导入旧版"); return; }
-  try { lsSet(PM_BAK, ""); } catch (e2) {}
-  updSt = { st: "idle", ver: "", file: "script/pm.js", chg: [], err: "", busy: false };
-  renderList(); toast("已回滚到 " + b.v + " —— 重开酒馆生效");
+  /* ★ 回滚跟更新走同一条写入路径 —— 以前回滚也是直接改 extensionSettings，
+       同一个坑：提示成功、重开还是新版。 */
+  pmWriteScript(String(b.c || ""), b.v, function (ok, msg) {
+    if (!ok) { toast("回滚失败：" + (msg || "写不进脚本库")); return; }
+    try { lsSet(PM_BAK, ""); } catch (e2) {}
+    updSt = { st: "idle", ver: "", file: "script/pm.js", chg: [], err: "", msg: "", busy: false };
+    renderList(); toast("已回滚到 " + b.v + " —— 重开酒馆生效");
+  });
 }
 function renderAbout() {
   var el = QI("list"); if (!el) return;
@@ -6800,7 +6899,8 @@ function renderAbout() {
   else if (st.st === "same") line = '<div class="abst">已是最新（线上 ' + esc(st.ver) + "）"
     + " · 想强制重下就点「重新覆盖」</div>";
   else if (st.st === "new") line = '<div class="abst">线上有新版 <b>' + esc(st.ver) + "</b>，更新后重开酒馆生效。</div>";
-  else if (st.st === "done") line = '<div class="abst">更新完了 —— <b>重开酒馆</b>才生效（脚本要重新加载）。</div>';
+  else if (st.st === "done") line = '<div class="abst">已写入 <b>' + esc(st.ver || "") + "</b>"
+    + (st.msg ? "（" + esc(st.msg) + "）" : "") + " —— <b>把酒馆完全关掉再开</b>才生效（脚本要重新加载）。</div>";
   else line = '<div class="abst">连的是仓库的 update.json 和 script/pm.js。</div>';
 
   var h = '<div class="exwrap">'
