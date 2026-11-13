@@ -180,7 +180,7 @@
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v1.6";
+var APP = "预设管理器", VER = "v1.9";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -1714,6 +1714,11 @@ function mount() {
       set: function (t, s, m) { exType = t; if (s !== undefined && s !== null) exSel = s; if (m) exMode = m; },
       build: exBuild
     },
+    /* 正文框定高（v1.7）：测试直接驱动，不用真弹键盘 */
+    ta: {
+      avail: taAvail, fit: fitTa, load: kbLoad, watch: kbWatch,
+      ratio: function () { return kbRatio; }
+    },
     probe: probeDump,
     /* 搜索匹配的纯函数：跨行 / 标点全半角这些坑全靠它，暴露出来好单独验 */
     find: { ranges: findRanges, tight: tightMap },
@@ -1736,7 +1741,11 @@ function mount() {
       cfg: shotCfg, apply: function () { if (pwin && pwin.SillyTavern) shotApply(); },
       scale: shotScale, clean: shotClean, buildSVG: shotBuildSVG,
       mesText: shotMesText, who: shotWho, css: SHOT_CSS,
-      inline: function (cl, cb) { shotInline(cl, cb); },
+      /* v1.8：签名多了 mes（要用原节点的真实尺寸锁图宽高）；两参老调法照样能用 */
+      inline: function (a, b, c) {
+        return (typeof b === "function") ? shotInline(null, a, b) : shotInline(a, b, c);
+      },
+      imgMax: function () { return SHOT_IMG_MAX; },
       /* 上限常量也露出来：测试断言别写死数字，写死了以后调参就是一片红 */
       maxpx: SHOT_MAXPX, maxside: SHOT_MAXSIDE, maxb: SHOT_MAXB,
       scan: shotScan, rescan: shotRescan, watch: shotWatch, tick: shotTick,
@@ -2278,7 +2287,7 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
    他明确说了：查找条和底栏【都不要收】。所以不动那两块，改成给正文框钉一个下限。
    ★ 这里用 vh 是有意的：vh 量的就是「键盘没弹时的视口」= 一个不会随键盘变的基准，
      正好当「最少给我这么多行」的尺子。高度不够时由 .sheet 纵向滚动兜底（它本来就能滚）。 */
-.tawrap{position:relative;flex:1;min-height:44vh;min-width:0;display:flex}
+.tawrap{position:relative;flex:1;min-height:110px;min-width:0;display:flex}
 /* 正文盒：整页唯一的那一个输入框 */
 .tawrap textarea{
   flex:1;width:100%;min-height:0;box-sizing:border-box;
@@ -3314,12 +3323,72 @@ function sheetFit() {
   s.style.left = R.left + "px"; s.style.top = R.top + "px";
   s.style.width = R.w + "px";  s.style.height = R.h + "px";
 }
+/* ── 正文框定高（v1.7）──────────────────────────────────────────────
+   ★★ 他 2026-11-13 晚上报的原话：「点进去输入框是大的，点一下键盘弹起来就压成小的，
+      刚定位的内容被顶上去了。要么点进去的大小跟点击之后一样。」
+   根因：以前 .tawrap 用 min-height:44vh —— vh 量的是【键盘没弹时】的视口，
+        所以进去时框很高；键盘一弹可视区矮一截，整页被挤、定位被顶走。
+   现在：框高度 = 「键盘弹起后剩下的可视高」− 其它固定块的高度，进去就定死，之后不再变。
+   键盘态可视高怎么来的：
+     · 键盘正弹着（vv.height 明显小于 innerHeight）→ 直接用真值；
+     · 键盘没弹 → 用上次记下的比例 kbRatio（存 sk_pm_kbr），没记过就按 0.62 估。
+   ⚠ 第一次用会有一点偏差（还没记过真实键盘高），弹过一次键盘后就准了。
+   ⚠ 别改回 vh / %：vh 在键盘弹起时【不变】，那正是这个 bug 的成因。 */
+var kbRatio = 0;
+function kbLoad() {
+  var v = parseFloat(ls("kbr", ""));
+  kbRatio = (v > 0.3 && v < 0.95) ? v : 0;
+}
+function taAvail() {
+  var W = vpWin(), full = W.innerHeight || 0;
+  var vv = W.visualViewport;
+  var vh = (vv && vv.height > 0) ? vv.height : full;
+  if (full && vh < full * 0.85) return Math.round(vh);      /* 键盘正弹着：真值 */
+  var r = kbRatio || 0.62;
+  return Math.round((full || vh) * r);
+}
+function fitTa() {
+  var s = sheetEl();
+  if (!s || !s.classList.contains("on") || edWhich !== "p") return;
+  var wrap = s.querySelector(".tawrap"); if (!wrap) return;
+  var fixed = 0;
+  [".shd", ".fbar", ".shead", ".smeta", ".sft"].forEach(function (sel) {
+    var e = s.querySelector(sel); if (e) fixed += e.offsetHeight || 0;
+  });
+  fixed += 26;                                   /* .sarea 上下 padding 12 + 两处 gap 14 */
+  var h = Math.max(110, taAvail() - fixed);
+  if (Math.abs((wrap.offsetHeight || 0) - h) <= 2) return;
+  wrap.style.height = h + "px";
+}
+/* 键盘弹起 / 收起、转屏都会让可视高变 —— 记下真值并重算一次。
+   ★ 只在编辑页生效（fitTa 自己会挡别的页）；60ms 防抖，别跟着键盘动画狂算。 */
+var kbT = 0, kbOn = false;
+function kbWatch() {
+  if (kbOn) return false;
+  var W = vpWin(), vv = W.visualViewport;
+  if (!vv || !vv.addEventListener) return false;
+  kbOn = true;
+  vv.addEventListener("resize", function () {
+    clearTimeout(kbT);
+    kbT = setTimeout(function () {
+      try {
+        var full = W.innerHeight || 0, h = vv.height || full;
+        if (full && h < full * 0.85) {           /* 这是「键盘弹着」的高度 → 记住比例 */
+          kbRatio = h / full; lsSet("kbr", kbRatio.toFixed(3));
+        }
+        sheetFit(); fitTa();
+      } catch (e) { ownErr(e); }
+    }, 60);
+  });
+  return true;
+}
 function sheetRender() {
   var s = sheetEl(); if (!s) return;
   s.innerHTML = (edWhich === "w" ? sheetWorld()
     : (edWhich === "r" ? sheetRegex()
     : (edWhich === "f" ? sheetFavSel()
     : (edWhich === "fr" ? sheetFavRead() : sheetPreset()))));
+  fitTa();                    /* 查找条一摊开/收起，固定块高度就变了，正文框跟着重算 */
 }
 function sheetShow(kind) {
   edWhich = kind;
@@ -3332,11 +3401,11 @@ function sheetShow(kind) {
        但词本身留着：点一下「查找」还能接着用。 */
     if (findQ) { fBar.q = findQ; fBar.on = true; } else { fBar.on = false; }
   }
-  sheetRender(); s.classList.add("on"); sheetFit();
+  sheetRender(); s.classList.add("on"); sheetFit(); fitTa();
   try { pdoc.body.style.overflow = "hidden"; } catch (e) {}   /* 底下那层别跟着一起滑 */
   /* 键盘是异步抬起来的：刚 focus 时拿到的常常还是抬起之前的尺寸，多补几枪 */
   var waits = [30, 90, 240, 520, 900];
-  for (var i = 0; i < waits.length; i++) setTimeout(sheetFit, waits[i]);
+  for (var i = 0; i < waits.length; i++) setTimeout(function () { sheetFit(); fitTa(); }, waits[i]);
   if (kind === "p") {
     fBoot();
     /* ★★ v1.6：进来【不自动抢焦点】。以前这里 focus 正文，手机立刻弹键盘，
@@ -5065,7 +5134,8 @@ function shotLogText() {
    scRoll / scFn / st 是滚动监听的把手（见 shotScrollBind）。 */
 var shotState = {
   obs: null, obsOn: null, css: false, t: 0, busy: false, mesN: -1,
-  scRoll: false, scFn: null, st: 0, nearAdd: 0, nearDrop: 0
+  scRoll: false, scFn: null, st: 0, nearAdd: 0, nearDrop: 0,
+  imgFail: 0                    /* 上一张截图里没画进去的图片张数（v1.8，会念给他听） */
 };
 var SHOT_SV = {
   cam: '<svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.4"/></svg>',
@@ -5165,7 +5235,27 @@ function shotOpsMake(m) {
    ★ 不整列拆了重建：重建会把整列节点换掉，正在点的那颗当场被抽走（也更容易闪）。
    顺序固定【收藏 → 相机 → 复制】。他说过「复制要更靠下，别误触下一页生成」，
    所以新图标一律往前插，复制永远钉在最后一颗。 */
+/* 这条是不是「我自己发的」。
+   ★★ v1.9 他原话：「那些星星照相复制的图标，我输入那个界面不要有，不然它会占掉我编辑那个地方，
+      只在系统消息那里显示，用户消息不显示。」→ 那一排只挂 AI 回复，自己发的一条都不挂。
+   ★ 认两个口径：现在酒馆是 `.mes[is_user="true"]` 属性；老版本 / 部分主题还用过 `.is_user` 类名。
+     两个都判，别只认一个（跟 .mes_name 那次栽的坑一个道理：只认一个就有一半认不出来）。 */
+function shotIsMine(m) {
+  try {
+    if (!m) return false;
+    var v = String(m.getAttribute && m.getAttribute("is_user") || "").toLowerCase();
+    if (v === "true" || v === "1") return true;
+    if (m.classList && m.classList.contains("is_user")) return true;
+  } catch (e) {}
+  return false;
+}
 function shotOpsSync(m) {
+  /* ★ 自己的消息：有图标就摘掉，不新挂 */
+  if (shotIsMine(m)) {
+    var mine = m.querySelector(".sk-shot-ops");
+    if (mine) { mine.remove(); return 1; }
+    return 0;
+  }
   var wantFav = !!favCfg.on, wantShot = !!shotCfg.on;
   var ops = m.querySelector(".sk-shot-ops");
   if (!wantFav && !wantShot) { if (ops) { ops.remove(); return 1; } return 0; }
@@ -5497,37 +5587,112 @@ function shotClean(cl) {
     + "iframe,video,audio,textarea,input,select,svg");
   for (var i = 0; i < ns.length; i++) { try { ns[i].remove(); } catch (e) {} }
 }
-/* 图片转 dataURL（foreignObject 里外部链接会整张失败）。
-   ★ 带三重保护：单张超时、总量超时、超大图先缩一道 ——
-     几千像素的原图转 dataURL 会把内存撑爆（小剧场那份没缩，是它的老毛病）。 */
-function shotInline(cl, cb) {
-  var imgs = cl.querySelectorAll("img"), n = imgs.length, left = n, fin = false;
-  var go = function () { if (!fin) { fin = true; clearTimeout(tm); cb(); } };
-  var tm = setTimeout(go, 6000);                    /* 总量超时：再慢也不能把人晾着 */
+/* ── 图片内联（v1.8 重写）───────────────────────────────────────────────
+   ★★ 他 2026-11-13 的原话：「我要是生成了那些图片，他看都不会看一眼」。
+      真因不在「截不截得到」，在于截出来的图**掉到了纯文字兜底**：
+      老代码见到 src 已经是 data: 就直接放行、跳过压缩 —— 可现在图片消息本身就是
+      一大串 base64。一张 4K 的 base64 PNG 原样塞进 SVG，字符串几十 MB，
+      foreignObject 必然解析失败 → 整条走 shotTextPNG → 图上一个字没有，只剩文字。
+   ★ 现在【所有】图片（不管 data: / blob: / 相对路径 / 外链）一律走同一条路：
+      拿到原始字节 → 解码 → 最长边缩到 SHOT_IMG_MAX → 重编码 JPEG。
+      几十 MB 压到几百 KB，SVG 才解析得动，图才画得进去。
+   ★ 三级兜底：fetch→blob→FileReader（最稳，不碰 canvas 跨域污染）
+              → Image 直载（同源）
+              → 都不行就保留原址并在截图后如实报「有几张没画进去」。
+   ⚠ 不许再对 data: 走捷径 —— 那就是这个 bug 的成因。 */
+var SHOT_IMG_MAX = 1080;          /* 单张图最长边：够看清，又不会把 SVG 撑爆 */
+function shotImgData(src, cb) {
+  var fin = false, tm = 0;
+  function done(u) { if (fin) return; fin = true; clearTimeout(tm); cb(u || ""); }
+  tm = setTimeout(function () { done(""); }, 9000);   /* 单张最多等 9 秒（解码大图要时间） */
+
+  /* 解码 + 缩放 + 重编码。跨域污染时 toDataURL 会抛 → 算失败，交给上层兜底 */
+  function enc(el) {
+    try {
+      var w = el.naturalWidth || el.width || 0, h = el.naturalHeight || el.height || 0;
+      if (!w || !h) { done(""); return; }
+      var sc = (w > SHOT_IMG_MAX || h > SHOT_IMG_MAX) ? SHOT_IMG_MAX / Math.max(w, h) : 1;
+      var c = pdoc.createElement("canvas");
+      c.width = Math.max(1, Math.round(w * sc));
+      c.height = Math.max(1, Math.round(h * sc));
+      var g = c.getContext("2d");
+      if (!g) { done(""); return; }
+      g.drawImage(el, 0, 0, c.width, c.height);
+      done(c.toDataURL("image/jpeg", 0.9));
+    } catch (e) { done(""); }
+  }
+  function dec(u) {
+    var im = new pwin.Image();
+    im.onload = function () { enc(im); };
+    im.onerror = function () { done(""); };
+    try { im.src = u; } catch (e) { done(""); }
+  }
+  /* ① 先把原始字节抓成 dataURL：自包含，不可能有跨域污染，也不会因为相对路径失配 */
+  var viaBlob = function () {
+    try {
+      if (typeof pwin.fetch !== "function") return false;
+      pwin.fetch(src, { cache: "force-cache" }).then(function (r) {
+        if (!r || (r.ok === false)) throw new Error("http " + (r && r.status));
+        return r.blob();
+      }).then(function (b) {
+        if (!b) throw new Error("no blob");
+        var fr = new pwin.FileReader();
+        fr.onload = function () { dec(String(fr.result || "")); };
+        fr.onerror = function () { dec(src); };
+        fr.readAsDataURL(b);
+      })["catch"](function () { dec(src); });   /* ② 抓不到就直载原址 */
+      return true;
+    } catch (e) { return false; }
+  };
+  if (!viaBlob()) dec(src);
+}
+/* 把克隆体里的 <img> 全部换成本地 dataURL，并锁死显示尺寸。
+   ★ 锁尺寸是必须的：克隆体要插进隐藏容器量高度（shotRaster 里），
+     那时 dataURL 图可能还没解码完，高度会被算小 → 图被裁掉一截。
+     先按原节点在屏幕上的真实 rect 写好 width/height，布局就稳了。 */
+function shotInline(mes, cl, cb) {
+  var imgs = cl.querySelectorAll("img");
+  var n = imgs.length;
+  var srcs = null;
+  try { srcs = mes ? mes.querySelectorAll("img") : null; } catch (e) {}
+  var left = n, fin = false, failN = 0;
+  function go() { if (fin) return; fin = true; clearTimeout(tm); cb(failN); }
+  var tm = setTimeout(go, 15000);            /* 总量兜底：再慢也不能把人晾着 */
   if (!n) { go(); return; }
-  var one = function () { if (--left <= 0) go(); };
-  for (var i = 0; i < n; i++) (function (im) {
+
+  function sizeIt(im, i) {
+    var se = srcs ? srcs[i] : null, r = null;
+    try { r = se ? se.getBoundingClientRect() : null; } catch (e) {}
+    if (!r || !(r.width > 2) || !(r.height > 2)) return;
+    var maxW = SHOT_W - 32, w = r.width, h = r.height;
+    if (w > maxW) { h = h * maxW / w; w = maxW; }
+    w = Math.round(w); h = Math.round(h);
+    im.setAttribute("width", w); im.setAttribute("height", h);
+    im.style.width = w + "px"; im.style.height = h + "px";
+    im.style.objectFit = "contain";
+  }
+
+  for (var i = 0; i < n; i++) (function (im, idx) {
+    /* ★ 懒加载的图真址在 data-src / data-original 里，src 只是个占位图；
+       不认这两个属性的话，截出来就是一堆灰色小方块（v1.8） */
     var src = im.getAttribute("src") || "";
-    if (!src || src.indexOf("data:") === 0) { one(); return; }
-    var done = false;
-    var step = function () { if (!done) { done = true; one(); } };
-    var t = new pwin.Image();
-    try { t.crossOrigin = "anonymous"; } catch (e) {}
-    t.onload = function () {
-      try {
-        var w = t.naturalWidth || 0, h = t.naturalHeight || 0, max = 900;
-        var sc = (w > max || h > max) ? Math.min(1, max / Math.max(w, h)) : 1;
-        var c = pdoc.createElement("canvas");
-        c.width = Math.max(1, Math.round(w * sc)); c.height = Math.max(1, Math.round(h * sc));
-        c.getContext("2d").drawImage(t, 0, 0, c.width, c.height);
-        im.setAttribute("src", c.toDataURL("image/jpeg", 0.85));
-      } catch (e) {}
-      step();
-    };
-    t.onerror = step;
-    setTimeout(step, 2500);                        /* 单张超时 */
-    try { t.src = src; } catch (e) { step(); }
-  })(imgs[i]);
+    var alt = im.getAttribute("data-src") || im.getAttribute("data-original") || "";
+    if (alt) src = alt;              /* 有真址就用真址，src 那会儿多半只是占位图 */
+    if (!src) { if (--left <= 0) go(); return; }
+    shotImgData(src, function (u) {
+      if (u) {
+        im.setAttribute("src", u);
+        im.removeAttribute("loading");       /* dataURL 不需要懒加载，留着反而可能不画 */
+        /* 尺寸按压缩后的真实比例重算一次（裁剪框 / object-fit 都不会变形） */
+        sizeIt(im, idx);
+      } else {
+        failN++;
+        /* 真拿不到：留个可见的空框，总比整段文字凭空消失好认 */
+        if (!/^data:/.test(src)) im.setAttribute("src", src);
+      }
+      if (--left <= 0) go();
+    });
+  })(imgs[i], i);
 }
 /* ★ 样式必须内联进 SVG —— 外部 CSS 在 foreignObject 里完全不生效，
      不内联的话截出来就是一堆裸标签（黑字白底，什么美化都没有）。 */
@@ -5790,11 +5955,14 @@ function shotDo(mes) {
   /* 上一张没出完就别再点：手机上连点两下最容易把内存打爆（这也是卡死的一种） */
   if (shotState.busy) { toast("上一张还在出，稍等一下"); return; }
   shotState.busy = true;
+  shotState.imgFail = 0;
   toast("正在截图…");
   var done = function () { shotState.busy = false; };
   var cl = mes.cloneNode(true);
   shotClean(cl);
-  shotInline(cl, function () {
+  shotInline(mes, cl, function (failN) {
+      /* ★ 图没画进去要如实说（v1.8）：闷声少几张，他会以为「截图又没带着图」 */
+      shotState.imgFail = failN || 0;
       shotRaster(mes, cl, function (blob, sc) {
       done(); shotSaveBlob(mes, blob, sc);
     }, function () {
@@ -5831,6 +5999,8 @@ function shotSaveBlob(mes, src, sc, isText) {
   /* 清晰度被手机上限压回来了要说明白 —— 闷声降会被当成「画质变差了」 */
   if (sc && sc < (+shotCfg.dpi || 2) - 0.01) msg += " · 这条太长，清晰度自动降到 " + sc.toFixed(1) + "×";
   if (isText) msg += "（纯文字版）";
+  /* ★ v1.8：有几张图画不进去就直说，别让他对着图找半天 */
+  if (shotState.imgFail) msg += " · 有 " + shotState.imgFail + " 张图没画进去（多半是外链不让抓）";
   /* ★★ 先把图变成能塞进 <a href> 的地址：
      有 createObjectURL → blob:；没有（他的 Android WebView）→ FileReader 读成 data:。
      全程内存，不碰酒馆 data 目录、不落临时文件。 */
@@ -6887,6 +7057,7 @@ function bootTail() {
       if (!apiReady()) toast("没检测到酒馆，正在用演示数据");
     }, 260);
   });
+  bootStepRun("键盘高度", function () { kbLoad(); kbWatch(); });
   bootStepRun("心跳", function () { vpWatch(); setInterval(tick, 2500); });
   if (!ls("tipped", "")) {
     lsSet("tipped", "1");
