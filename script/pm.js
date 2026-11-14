@@ -180,7 +180,7 @@
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v2.4";
+var APP = "预设管理器", VER = "v2.5";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -850,6 +850,11 @@ var panelOpen = false;
    开关一条没变、条目一条没少 —— 只有顺序被按开关状态重排过。
    这类坏法很隐蔽（看着像排序，其实是顺序表被重写了），所以要留一只眼睛盯着。 */
 var ordWarn = null;
+/* ★ v2.5：编辑页底栏「名字 / 角色」是收着还是开着。
+   放在外面记着，是因为 sheetRender() 会整页重画（查找条一开一关就重画一次）——
+   状态若只挂在 DOM 上，重画一次就自己收起来了，他正在改名时会被打断。
+   ⚠ 换一条条目进编辑页要复位（见 sheetShow），别把上一条的展开状态带过来。 */
+var sftOpen = false;
 var ORD_K = "ord";   /* localStorage 键名（ls/lsSet 会自动加 sk_pm_ 前缀 → 实际存 sk_pm_ord），
                         内容是各预设「上一次正常顺序」的快照，用来一键还原 */
 
@@ -1731,11 +1736,8 @@ function mount() {
       set: function (t, s, m) { exType = t; if (s !== undefined && s !== null) exSel = s; if (m) exMode = m; },
       build: exBuild
     },
-    /* 正文框定高（v1.7）：测试直接驱动，不用真弹键盘 */
-    ta: {
-      avail: taAvail, fit: fitTa, load: kbLoad, watch: kbWatch,
-      ratio: function () { return kbRatio; }
-    },
+    /* 正文框定高（v2.5：全实测）—— 测试直接驱动，不用真弹键盘 */
+    ta: { room: taRoom, fit: fitTa, watch: kbWatch },
     probe: probeDump,
     /* 搜索匹配的纯函数：跨行 / 标点全半角这些坑全靠它，暴露出来好单独验 */
     find: { ranges: findRanges, tight: tightMap },
@@ -1770,6 +1772,8 @@ function mount() {
       mesText: shotMesText, who: shotWho, css: SHOT_CSS,
       /* v2.2：shadow 展开 + DOM 诊断（柏宝绘那类影子盒子不搬出来就永远是 0 张图） */
       shadow: shotShadowInline, dump: shotDomDump,
+      /* v2.5：图标列摆位（贴底 + 避开酒馆那排按钮）—— 给测试直接驱动，不用造真机 */
+      place: shotOpsPlace,
       /* v1.8：签名多了 mes（要用原节点的真实尺寸锁图宽高）；两参老调法照样能用 */
       inline: function (a, b, c) {
         return (typeof b === "function") ? shotInline(null, a, b) : shotInline(a, b, c);
@@ -2412,6 +2416,22 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
   display:flex;flex-direction:column;gap:6px}
 .srow{display:flex;align-items:center;gap:8px}
 .srow>.lb{flex:none;width:34px;font-size:10.5px;color:var(--ink3)}
+/* ── 底栏收起态（v2.5）────────────────────────────────────────────
+   他 2026-11-14 定：「名字/角色收成一条，点开才显」—— 因为正文框要一直撑到键盘上沿。
+   ⚠ 收起时这一条必须【矮】：它是正文框唯一的对手，这里多 10px 正文就少 10px。 */
+.sft.fold .ftb{display:none}
+.sft.fold{padding-top:5px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}
+.sft .ftg{display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;
+  min-width:0;padding:5px 8px;border-radius:9px;border:1px solid var(--line);
+  background:var(--paper);color:var(--ink);font:12px/1.4 inherit;text-align:left;cursor:pointer}
+.sft .ftg:active{background:var(--paper3)}
+.sft .ftg .grow{flex:1}
+.sft .ftg .ftk{flex:none;font-size:10.5px;color:var(--ink3)}
+.sft .ftg .ftv{flex:0 1 auto;min-width:0;max-width:42%;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sft .ftg .ftw{max-width:26%;font-weight:500;color:var(--ink2)}
+.sft .ftg .ftx{flex:none;font-size:10.5px;color:var(--ink3);
+  border:1px solid var(--line);border-radius:7px;padding:1px 6px;background:var(--paper2)}
 .sft input,.sft select{flex:1;min-width:0;padding:7px 10px;border-radius:11px;
   border:1px solid var(--line);background:var(--paper);color:var(--ink);
   font-size:13px;font-family:inherit;outline:none}
@@ -3359,40 +3379,80 @@ function sheetFit() {
   s.style.left = R.left + "px"; s.style.top = R.top + "px";
   s.style.width = R.w + "px";  s.style.height = R.h + "px";
 }
-/* ── 正文框定高（v1.7）──────────────────────────────────────────────
-   ★★ 他 2026-11-13 晚上报的原话：「点进去输入框是大的，点一下键盘弹起来就压成小的，
-      刚定位的内容被顶上去了。要么点进去的大小跟点击之后一样。」
-   根因：以前 .tawrap 用 min-height:44vh —— vh 量的是【键盘没弹时】的视口，
-        所以进去时框很高；键盘一弹可视区矮一截，整页被挤、定位被顶走。
-   现在：框高度 = 「键盘弹起后剩下的可视高」− 其它固定块的高度，进去就定死，之后不再变。
-   键盘态可视高怎么来的：
-     · 键盘正弹着（vv.height 明显小于 innerHeight）→ 直接用真值；
-     · 键盘没弹 → 用上次记下的比例 kbRatio（存 sk_pm_kbr），没记过就按 0.62 估。
-   ⚠ 第一次用会有一点偏差（还没记过真实键盘高），弹过一次键盘后就准了。
-   ⚠ 别改回 vh / %：vh 在键盘弹起时【不变】，那正是这个 bug 的成因。 */
-var kbRatio = 0;
-function kbLoad() {
-  var v = parseFloat(ls("kbr", ""));
-  kbRatio = (v > 0.3 && v < 0.95) ? v : 0;
+/* ── 正文框定高（v2.5：全部实测，一个估算值都不留）────────────────────
+   ★★ 他 2026-11-14 拍照报的原话：「第二张图那个输入框位置太小了，你可以根据我手机
+      那个键盘和那个输入框位置调一下」，并确认「一进去就小（键盘还没弹）」。
+   病根就在 v1.7 的估算上：拿「上次记住的键盘比例（没记过按 0.62 估）」× 屏高
+   当作键盘态可视高 —— 那是【键盘弹着】时量出来的比例，却被无条件用在「键盘没弹」
+   的时候。于是每次进去都按「键盘已经吃掉四成屏」来算，框天生矮一截，
+   框底下那一大块空白就是被这么算没的（他第二张图里框和键盘之间那块）。
+   现在：不估了，全实测 ——
+     框高 = sheet 实高 − 上面那几块（顶栏 / 查找条 / 「正文」那行）− 下面那几块
+            （计数那行 / 底栏 / 内边距 / 间距）。
+     sheet 的高度本来就是 sheetFit 按 visualViewport 写死的（键盘一弹它自己变矮），
+     所以这个式子【自动】跟着键盘走：键盘弹着算到键盘上沿，没弹就一直算到屏幕底。
+   ⚠ 别改回 vh / %（vh 键盘弹起时不变），也别改回「比例估算」（就是他这次报的问题）。
+   ⚠ 也别再回来数「固定块有几个」—— 用 offsetHeight 实测 sheet 的直接子节点，
+     以后加/删一块（比如底栏折叠）不用再回来改这里。 */
+/* 读某个元素上某个 CSS 长度（px），读不到就用兜底值。
+   ★ 为什么要兜底：getComputedStyle 在部分 WebView 里对 rowGap 返回 "normal"，
+     parseFloat 出来是 NaN —— 直接当 0 用会少扣 14px，框就比能放的多长 14px、底部被裁。
+     （这类的教训：宁可退回 CSS 里写死的值，也别把 NaN 当 0。） */
+function cssPx(el, prop, dflt) {
+  var cs = null;
+  try { cs = vpWin().getComputedStyle(el, null); } catch (e0) { cs = null; }
+  if (!cs) return dflt;
+  var v = parseFloat(cs[prop]);
+  if (!isFinite(v) && prop === "rowGap") v = parseFloat(cs.gap);
+  return isFinite(v) ? v : dflt;
 }
-function taAvail() {
-  var W = vpWin(), full = W.innerHeight || 0;
-  var vv = W.visualViewport;
-  var vh = (vv && vv.height > 0) ? vv.height : full;
-  if (full && vh < full * 0.85) return Math.round(vh);      /* 键盘正弹着：真值 */
-  var r = kbRatio || 0.62;
-  return Math.round((full || vh) * r);
+/* 这一个式子就是「现在能给正文框多高」，返回 0 ＝ 量不出来（页面没渲染好）。
+   拆出来单独放，是为了能测：不依赖任何状态，纯几何。 */
+function taRoom() {
+  var s = sheetEl();
+  if (!s || !s.classList.contains("on") || edWhich !== "p") return 0;
+  var wrap = s.querySelector(".tawrap"); if (!wrap) return 0;
+  var sr = s.getBoundingClientRect ? s.getBoundingClientRect() : null;
+  /* sheet 的实高：优先 rect；量不出来（还没排版 / 缩放的 iframe 里 rect 常为 0）
+     就退到 sheetFit 写进去的那条行内高度 —— 那是同一个值，不会算错。 */
+  var shh = (sr && sr.height) ? sr.height : 0;
+  if (!shh) {
+    var ih = parseFloat(s.style && s.style.height);
+    shh = s.offsetHeight || (isFinite(ih) ? ih : 0);
+  }
+  if (!shh) return 0;
+  var fixed = 0, i, c, kids;
+  /* ① 真正的一层是 [data-edbox]（sheetRender 把整页包在它里面）—— 直接遍历 sheet
+     的子节点只会数到这一个壳，上下固定块全漏掉（少扣一整块，框就比能放的高一截）。 */
+  var box = s.querySelector("[data-edbox]") || s;
+  for (i = 0; i < box.children.length; i++) {
+    c = box.children[i];
+    if (!c || !c.classList || c.classList.contains("sarea")) continue;
+    fixed += c.offsetHeight || 0;
+  }
+  /* ② .sarea 自己：上下内边距 + 除正文框以外的孩子 + 它们之间的间距 */
+  var area = s.querySelector(".sarea");
+  if (area) {
+    var padT = cssPx(area, "paddingTop", 6);
+    var padB = cssPx(area, "paddingBottom", 6);
+    var gp = cssPx(area, "rowGap", 7);
+    fixed += padT + padB;
+    kids = area.children || [];
+    for (i = 0; i < kids.length; i++) {
+      if (kids[i] === wrap) continue;
+      fixed += kids[i].offsetHeight || 0;
+    }
+    fixed += gp * Math.max(0, kids.length - 1);
+  }
+  return Math.round(shh - fixed);
 }
 function fitTa() {
   var s = sheetEl();
-  if (!s || !s.classList.contains("on") || edWhich !== "p") return;
+  if (!s || !s.classList.contains("on")) return;
   var wrap = s.querySelector(".tawrap"); if (!wrap) return;
-  var fixed = 0;
-  [".shd", ".fbar", ".shead", ".smeta", ".sft"].forEach(function (sel) {
-    var e = s.querySelector(sel); if (e) fixed += e.offsetHeight || 0;
-  });
-  fixed += 26;                                   /* .sarea 上下 padding 12 + 两处 gap 14 */
-  var h = Math.max(110, taAvail() - fixed);
+  var h = taRoom();
+  if (!h) return;                                  /* 量不出来就别乱写高度 */
+  if (h < 96) h = 96;                              /* 兜底下限：再挤也要能看见几行 */
   if (Math.abs((wrap.offsetHeight || 0) - h) <= 2) return;
   wrap.style.height = h + "px";
 }
@@ -3407,13 +3467,9 @@ function kbWatch() {
   vv.addEventListener("resize", function () {
     clearTimeout(kbT);
     kbT = setTimeout(function () {
-      try {
-        var full = W.innerHeight || 0, h = vv.height || full;
-        if (full && h < full * 0.85) {           /* 这是「键盘弹着」的高度 → 记住比例 */
-          kbRatio = h / full; lsSet("kbr", kbRatio.toFixed(3));
-        }
-        sheetFit(); fitTa();
-      } catch (e) { ownErr(e); }
+      /* 键盘一弹，visualViewport 变矮 → sheet 重贴一次，正文框按新的实高重算。
+         ★ v2.5 起这里不用再记「键盘比例」了：fitTa 全靠实测，键盘多高都自己算对。 */
+      try { sheetFit(); fitTa(); } catch (e) { ownErr(e); }
     }, 60);
   });
   return true;
@@ -3433,6 +3489,7 @@ function sheetShow(kind) {
      之后再改状态也不会自己重画（真踩过：点搜索结果进来查找条是收着的）。 */
   if (kind === "p") {
     fBar.undo = null;
+    sftOpen = false;                 /* 换一条进来 → 底栏回到收起态（正文框先给满） */
     /* 有搜索词 → 摊开并定位；没有（直接从列表点进来）→ 收起，别拿上次的词打扰人。
        但词本身留着：点一下「查找」还能接着用。 */
     if (findQ) { fBar.q = findQ; fBar.on = true; } else { fBar.on = false; }
@@ -3720,11 +3777,21 @@ function sheetPreset() {
     +     '<span class="stok" data-cnt="' + it.id + '">' + fmt(tokOf(ct)) + " tok</span>"
     +   "</div>"
     + "</div>"
-    + '<div class="sft">'
+    /* ★ v2.5：底栏「名字 / 角色」默认收成一条 —— 他 2026-11-14 定：
+       正文框要一直撑到键盘上沿，这两栏挡在中间就只能让。点一下这条才展开。
+       ★ 收起来时这条【不许高】：它是正文框唯一的对手，高度全从它身上省。 */
+    + '<div class="sft' + (sftOpen ? "" : " fold") + '" data-sft="1">'
+    +   '<button type="button" class="ftg" data-ftg="1">'
+    +     '<span class="ftk">名字</span><b class="ftv">' + esc(nm || "（未命名）") + "</b>"
+    +     '<span class="ftk">角色</span><b class="ftv ftw">' + esc(rl || "system") + "</b>"
+    +     '<span class="grow"></span><span class="ftx">' + (sftOpen ? "收起" : "展开") + "</span>"
+    +   "</button>"
+    +   '<div class="ftb">'
     +   '<div class="srow"><span class="lb">名字</span>'
     +     '<input type="text" data-nm="' + it.id + '" value="' + escAttr(nm) + '" placeholder="条目名"></div>'
     +   '<div class="srow"><span class="lb">角色</span>' + roleSelect(it.id, rl)
     +     '<span class="grow"></span><span class="smeta">停手一秒自动存</span></div>'
+    +   "</div>"
     + "</div></div>";
 }
 function sheetWorld() {
@@ -5302,8 +5369,12 @@ function shotCSS() {
          = 900 个半透明合成层，滚动和打开面板时 GPU 要一层层贴，必卡。
          现在：不写 opacity（改用半透明背景色，视觉上一样淡）、去掉 transition（只留 :active
          的瞬时缩放）、加 contain 让每个图标列自成布局孤岛（改它不触发整条消息重排）。 */
-      ".sk-shot-ops{position:absolute;right:8px;bottom:44px;display:flex;flex-direction:column;gap:6px;z-index:14;contain:layout style}" +
-      ".sk-shot-ops i{width:27px;height:27px;border-radius:9px;display:flex;align-items:center;justify-content:center;" +
+      /* ★ 2026-11-14 他拍照定的：①「复制那颗被下面重新生成那排挡住了」→ 整列贴到 .mes
+         最底，再按【酒馆那排按钮的实测左边界】左右错开，两层永不重叠；
+         ②「这些按钮给我调小一点，要更小一点」→ 27 → 20px，里面的图标 14 → 12px。
+         20px 是手指还能点中的下限，别再往下调（再小就点不中，误触生成）。 */
+      ".sk-shot-ops{position:absolute;right:8px;bottom:2px;display:flex;flex-direction:column;gap:4px;z-index:14;contain:layout style}" +
+      ".sk-shot-ops i{width:20px;height:20px;border-radius:7px;display:flex;align-items:center;justify-content:center;" +
         "cursor:pointer;background:rgba(22,22,28,.42)}" +
       ".sk-shot-ops i:hover{background:rgba(22,22,28,.62)}" +
       ".sk-shot-ops i:active{transform:scale(.9)}" +
@@ -5312,7 +5383,7 @@ function shotCSS() {
       ".sk-pm-open .sk-shot-ops{display:none}" +
       /* 收藏那颗：已收藏 = 实心金（空心/实心一眼分得清，不靠颜色深浅） */
       ".sk-shot-ops i.sk-fv.on svg{fill:#f2c14e;stroke:#f2c14e}" +
-      ".sk-shot-ops svg{width:14px;height:14px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}" +
+      ".sk-shot-ops svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}" +
       /* 卡片 */
       ".sk-thm-card .mes_text{background:#fdfbf5;color:#3a3226;border-radius:6px;border-left:4px solid #b8944a;" +
         "padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.35)}" +
@@ -5400,6 +5471,11 @@ function shotOpsSync(m) {
   if (!wantFav && !wantShot) { if (ops) { ops.remove(); return 1; } return 0; }
   var add = 0;
   if (!ops) { ops = shotOpsMake(m); add = 1; }
+  /* 刚挂上那拍还没排版好（rect 全是 0）→ 下一拍补量一次。
+     ★ 盖上 data-skpl 就不再量：300 条聊天不会每拍都去 getBoundingClientRect（那是卡的老病根）。 */
+  if (!ops.getAttribute("data-skpl")) {
+    try { shotOpsPlace(m, ops); } catch (eP2) { ownErr(eP2); }
+  }
   var fv = ops.querySelector(".sk-fv"), sh = ops.querySelector(".sk-sh"), cp = ops.querySelector(".sk-cp");
   if (wantFav && !fv) {
     fv = shotIco("sk-fv", FAV_SV.star, "收藏这一条（再点取消）", function (ev) {
@@ -5469,15 +5545,42 @@ function shotOne(m) {
    按死在 bottom:14px 就会跟那排按钮叠一起（老毛病「布局混乱」）。
    实测一次气泡底边到 .mes 底边的距离就够了：这个距离正好是按钮那排的高度，
    而且【跟正文长短无关】，所以算一次就永远有效，正文再长也不用重算。 */
+/* 图标列摆位（v2.5 定稿 —— 他 2026-11-14 拍照提的两条）
+   ★★ 他的原话：「复制键的按钮被下面这个重新生成的按钮挡着了，我要你把它调到最底部，
+      然后这些按钮给我调小一点」。
+   老做法的病：靠「气泡底边 → .mes 底边」的距离反推按钮那排有多高，再把整列顶上去。
+   可那排按钮并不总在这段距离里（有的主题是绝对定位、有的被负 margin 拔高），
+   量出来偏小 → 整列正好压在那排按钮上，最下面的复制那颗被挡。
+   现在：
+     ① 贴底 —— 整列 bottom:2px，永远贴着 .mes 的最下沿（他要的「最底部」）；
+     ② 避让 —— 实测酒馆那排按钮（.mes_buttons）的【左边界】，把整列挪到它左边。
+        同一高度、左右错开，两层永远不叠。
+        只认「贴着右边、竖着的窄列」（宽度 < 消息宽的 45%）：有些主题那排是整行宽的，
+        那种情况硬挪会把图标甩到消息左边去 —— 量不准就不动，宁可按 right:8px 叠一点点。
+   返回 true ＝ 这次真量出来了。量不出来（还没排版好）就别盖标记，下一拍再补一次。 */
 function shotOpsPlace(m, ops) {
-  var t = m.querySelector(".mes_text") || m;
-  if (!t.getBoundingClientRect || !m.getBoundingClientRect) return;
-  var mr = m.getBoundingClientRect(), tr = t.getBoundingClientRect();
-  if (!mr.height || !tr.height) return;              /* 还没渲染出来 → 用 CSS 兜底值 */
-  var gap = mr.bottom - tr.bottom;
-  if (!isFinite(gap)) return;
-  var b = Math.round(gap + 10);
-  ops.style.bottom = (b < 6 ? 6 : b) + "px";
+  if (!m || !ops || !m.getBoundingClientRect) return false;
+  var mr = m.getBoundingClientRect();
+  if (!mr.height || !mr.width) return false;          /* 还没渲染出来 → 用 CSS 兜底值 */
+  ops.style.bottom = "2px";
+  var right = 8;
+  var btns = m.querySelector(".mes_buttons");
+  if (btns && btns.getBoundingClientRect) {
+    var br = btns.getBoundingClientRect();
+    if (br.width > 2 && br.height > 2 && br.width < mr.width * 0.45) {
+      var r = Math.round(mr.right - br.left) + 6;
+      if (r > 8) right = r;
+    } else if (!br.width && !br.height) {
+      /* 那排这会儿藏着（酒馆是「点一下才显出来」）→ 按一列的宽度先给它留好位置。
+         不留的话，他一按消息、那排冒出来，正好又盖住最下面那颗复制。 */
+      right = 42;
+    }
+  }
+  var maxR = Math.round(mr.width) - 26;               /* 20px 图标 + 6px 余量：不许挤出左边界 */
+  if (maxR > 8 && right > maxR) right = maxR;
+  ops.style.right = right + "px";
+  ops.setAttribute("data-skpl", "1");
+  return true;
 }
 /* ── 只给「看得见的那几条」挂图标（2026-11-13 他原话「滑动聊天时卡」） ────
    ★★ 老做法为什么卡（真机实测）：全扫时给**每一条** .mes 都挂图标列，
@@ -7433,7 +7536,7 @@ function bootTail() {
       if (!apiReady()) toast("没检测到酒馆，正在用演示数据");
     }, 260);
   });
-  bootStepRun("键盘高度", function () { kbLoad(); kbWatch(); });
+  bootStepRun("键盘高度", function () { kbWatch(); });
   bootStepRun("心跳", function () { vpWatch(); setInterval(tick, 2500); });
   if (!ls("tipped", "")) {
     lsSet("tipped", "1");
@@ -7542,6 +7645,30 @@ function bindAll() {
     if ((h = hit("data-pbulk"))) { pBulkOpen(); return; }
     if ((h = hit("data-pundo"))) { pUndoDo(); return; }
     if ((h = hit("data-errcopy"))) { errCopy(); return; }
+    /* 底栏「名字 · 角色」收/展（v2.5）—— 收起时正文框一直吃到键盘上沿，
+       展开时把正文框挤小一点。切完必须重算框高，否则那块空白又回来了。
+       ⚠ 展开时【不许 focus 任何输入框】：一 focus 键盘就弹，整页重排＝卡（老坑）。 */
+    if ((h = hit("data-ftg"))) {
+      var fbox = h.closest(".sft");
+      if (fbox) {
+        var fFold = fbox.classList.contains("fold");
+        if (fFold) {
+          /* 要收起：先把输入框里的当前值抄到摘要条上（不然改了名字还显示旧的） */
+          var fnm = fbox.querySelector("[data-nm]"), frl = fbox.querySelector("[data-role]");
+          var fv1 = fbox.querySelector(".ftv"), fv2 = fbox.querySelector(".ftw");
+          if (fnm && fv1) fv1.textContent = fnm.value || "（未命名）";
+          if (frl && fv2) fv2.textContent = frl.value || "system";
+          fbox.classList.remove("fold");
+        } else {
+          fbox.classList.add("fold");
+        }
+        sftOpen = fFold;                 /* 记在外面：整页重画后还保持这个状态 */
+        var flab = fbox.querySelector(".ftx");
+        if (flab) flab.textContent = fFold ? "收起" : "展开";
+        fitTa();
+      }
+      return;
+    }
     /* 顺序自检条（v2.4）：一键按上次正常顺序还原 / 先不管 */
     if ((h = hit("data-ordfix"))) { ordFixRun(); return; }
     if ((h = hit("data-ordx"))) { ordWarn = null; renderList(); return; }
