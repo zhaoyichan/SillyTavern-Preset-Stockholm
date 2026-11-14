@@ -180,7 +180,7 @@
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v2.3";
+var APP = "预设管理器", VER = "v2.4";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -845,6 +845,13 @@ var editingId = null;  /* 正在就地编辑的条目 id（预设 / 正则 共�
 var draft = null;      /* 正在编辑但还没保存的内容（防止重渲染把字吃掉） */
 var tab = "all";
 var panelOpen = false;
+/* ★ v2.4 顺序自检：order 被打成「开着的全在前、关着的全在后」时记在这里（null = 没发现）。
+   2026-11-14 他报「全部条目的顺序被异化」：导出的预设里 23 条开的挤在前面、47 条关的甩在后面，
+   开关一条没变、条目一条没少 —— 只有顺序被按开关状态重排过。
+   这类坏法很隐蔽（看着像排序，其实是顺序表被重写了），所以要留一只眼睛盯着。 */
+var ordWarn = null;
+var ORD_K = "ord";   /* localStorage 键名（ls/lsSet 会自动加 sk_pm_ 前缀 → 实际存 sk_pm_ord），
+                        内容是各预设「上一次正常顺序」的快照，用来一键还原 */
 
 var view = "preset";   /* preset | world | regex */
 var wbBooks = [];      /* {name, scope:'global'|'character'|'chat', whole:true/false/null, entries:[], pinned} */
@@ -1055,6 +1062,16 @@ function applyPresetRaw(raw) {
       items.forEach(function (it, i) { it.id = "it" + i; });
     }
   } catch (eO) {}
+
+  /* ★ v2.4 顺序自检：先看「这条顺序是不是被打成两堆」，正常才留快照。
+     ⚠ 顺序真被打乱时【绝不能】拿它覆盖快照 —— 不然快照也跟着坏，就再也还原不回来了。 */
+  ordWarn = null;
+  try {
+    var enMap = {};
+    for (var kO = 0; kO < items.length; kO++) enMap[items[kO].identifier] = !!items[kO].enabled;
+    ordWarn = ordIsGrouped(order, enMap);
+    if (!ordWarn) ordSnapPut(presetName, order);
+  } catch (eOrd) {}
 
   /* 分组：写在预设里，换个设备也跟着预设走（extensions.sk_pm.groups） */
   pgGroups = [];
@@ -1731,6 +1748,16 @@ function mount() {
       return { step: bootStep, fail: bootFail.slice(), ok: bootOK, err: lastErr };
     },
     reorder: function (seq) { pSort = true; pReorderSeq(seq); },   /* 测试用：直接驱动拖动结果 */
+    /* 顺序自检（v2.4）：判「两堆」的纯函数 / 提示条 / 快照 / 一键还原，测试直接驱动 */
+    ord: {
+      grouped: ordIsGrouped,
+      bar: function () { return ordBarHTML(); },
+      fix: ordFixRun,
+      snapGet: ordSnapGet,
+      snapPut: ordSnapPut,
+      warn: function () { return ordWarn; },
+      setWarn: function (v) { ordWarn = v; }
+    },
     /* 悬浮球摆位：测试要能直接驱动「默认归中 / 小窗钳回可视区」，
        不用重新跑 orbInit（那会重复绑事件）。 */
     orb: { center: orbCenter, clamp: orbClamp, userPos: orbUserPos },
@@ -2414,6 +2441,13 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
 .errbar svg{width:13px;height:13px;flex:none}
 .errbar b{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .errbar .x{flex:none;font-size:11px;color:var(--ink3)}
+/* 顺序自检条（v2.4）：预设顺序表被打成「开着的全在前、关着的全在后」时提醒。
+   用金色不用红色 —— 这不是数据坏了，是顺序被重排了，条目一条都没少。 */
+.ordbar{border-color:rgba(186,117,23,.45);background:rgba(186,117,23,.10);
+  color:var(--goldD);cursor:default}
+.ordbar .chip{flex:none;cursor:pointer;font-size:11px;padding:3px 9px;border-radius:8px;
+  border:1px solid rgba(186,117,23,.45);color:var(--goldD);background:rgba(255,255,255,.55)}
+.ordbar .x{flex:none;cursor:pointer}
 /* toast 1300 */
 /* toast 1300 —— 位置同样由 JS 实测写死（toastFit），理由同弹窗：
    bottom:calc(72px+…) 量的是 iframe / 地址栏收起时的视口，小窗口下会飘。 */
@@ -4812,6 +4846,60 @@ function errSave(e) {
   try { console.error("[预设管理器] 出错了：", e); } catch (x4) {}
   try { orbBad(); } catch (x5) {}
 }
+/* ── 顺序自检（v2.4）──────────────────────────────────────────────────
+   为什么要有这一段：2026-11-14 他导出预设给我，里面 23 条开着的挤到最前面、
+   47 条关着的全甩到后面 —— 条目和开关一条没变，只有顺序表被按开关状态重排过。
+   顺序不只是好看：酒馆是照这个顺序把条目拼进上下文的，顺序一变，输出风格就漂。
+   所以：① 读到「两堆」就当场提醒；② 每读到一次【正常】顺序就存个快照，
+   下次被打乱时能用它一键还原。 */
+function ordSnapAll() {
+  var o = lsJSON(ORD_K, {});
+  return (o && typeof o === "object" && !(o.push)) ? o : {};
+}
+function ordSnapGet(name) {
+  var a = ordSnapAll(), v = a[String(name || "")];
+  return (v && v.seq && v.seq.push) ? v.seq : null;
+}
+function ordSnapPut(name, seq) {
+  if (!name || !seq || !seq.length || seq.length < 6) return;
+  var a = ordSnapAll();
+  a[String(name)] = { seq: seq.slice(0, 400), at: Date.now() };
+  try { lsSet(ORD_K, JSON.stringify(a)); } catch (e) {}
+}
+/* 「顺序是不是被打成两堆」：开着的都在前、关着的都在后。
+   ⚠ 门槛 3/3：只有一两条开关的预设本来就长这样，不能算坏（宁可漏报，不许误报）。 */
+function ordIsGrouped(seq, en) {
+  var seenOff = false, on = 0, off = 0;
+  for (var i = 0; i < seq.length; i++) {
+    var e = en[seq[i]];
+    if (e === undefined) continue;            /* 顺序表里指向已删条目的坑，跳过 */
+    if (e) { if (seenOff) return null; on++; } else { seenOff = true; off++; }
+  }
+  return (on >= 3 && off >= 3) ? { on: on, off: off } : null;
+}
+function ordBarHTML() {
+  if (!ordWarn) return "";
+  var canFix = !!ordSnapGet(presetName);
+  return '<div class="errbar ordbar" data-ordbar="1">'
+    + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">'
+    +   '<path d="M12 3l9 16.5H3L12 3z"/><path d="M12 10v4M12 17h.01"/></svg>'
+    + '<b>顺序被打成两堆：开着的 ' + ordWarn.on + " 条全在前、关着的 " + ordWarn.off + " 条全在后"
+    +   (canFix ? "" : "（条目和开关一条没少，只是顺序变了）") + "</b>"
+    + (canFix ? '<span class="chip" data-ordfix="1">还原成上次的顺序</span>' : "")
+    + '<span class="x" data-ordx="1">' + (canFix ? "先不管" : "知道") + "</span>"
+    + "</div>";
+}
+function ordFixRun() {
+  var snap = ordSnapGet(presetName);
+  if (!snap) { toast("没有可用的旧顺序快照，这次只能手动排"); return; }
+  var have = {};
+  items.forEach(function (it) { if (it.identifier) have[it.identifier] = 1; });
+  var seq = snap.filter(function (x) { return have[x]; });
+  if (seq.length < 3) { toast("旧快照跟现在的条目对不上，不能硬套"); return; }
+  ordWarn = null;
+  pReorderSeq(seq);        /* 里面会 save()（写回预设）+ renderList() */
+  toast("已还原成上次的顺序（快照之后新加的条目排在最后）");
+}
 function errBarHTML() {
   if (!lastErr) return "";
   return '<div class="errbar" data-errcopy="1" title="点一下复制整段报错">'
@@ -4919,6 +5007,9 @@ function renderList() {
   try {
     var el = QI("list"), bar = errBarHTML();
     if (el && bar) el.insertAdjacentHTML("afterbegin", bar);
+    /* 顺序自检只对预设页有意义（v2.4）：世界书 / 正则页没有「顺序」这回事 */
+    var ob = (view === "preset") ? ordBarHTML() : "";
+    if (el && ob) el.insertAdjacentHTML("afterbegin", ob);
   } catch (e) {}
 }
 function switchView(v) {
@@ -7451,6 +7542,9 @@ function bindAll() {
     if ((h = hit("data-pbulk"))) { pBulkOpen(); return; }
     if ((h = hit("data-pundo"))) { pUndoDo(); return; }
     if ((h = hit("data-errcopy"))) { errCopy(); return; }
+    /* 顺序自检条（v2.4）：一键按上次正常顺序还原 / 先不管 */
+    if ((h = hit("data-ordfix"))) { ordFixRun(); return; }
+    if ((h = hit("data-ordx"))) { ordWarn = null; renderList(); return; }
     /* 截图设置页：开关 / 格式 / 底色 / 美化主题（清晰度滑条走 input 委托） */
     if ((h = hit("data-shotsw"))) { shotCfg.on = !shotCfg.on; shotSave(); shotApply(); renderList(); toast(shotCfg.on ? "消息截图已开启" : "消息截图已停用"); return; }
     if ((h = hit("data-shotfmt"))) { shotCfg.fmt = h.getAttribute("data-shotfmt"); shotSave(); renderList(); return; }
