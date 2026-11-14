@@ -181,7 +181,7 @@
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v2.8";
+var APP = "预设管理器", VER = "v2.9";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -2323,13 +2323,15 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
    他明确说了：查找条和底栏【都不要收】。所以不动那两块，改成给正文框钉一个下限。
    ★ 这里用 vh 是有意的：vh 量的就是「键盘没弹时的视口」= 一个不会随键盘变的基准，
      正好当「最少给我这么多行」的尺子。高度不够时由 .sheet 纵向滚动兜底（它本来就能滚）。 */
-/* ★★ v2.7（2026-11-14 主人定）：正文框改成【纯 CSS 固定布局】—— flex 吃满剩余空间，
-   JS 不再算高度、不再写内联高度。
-   原因（他原话）：「感觉还是固定的好」—— 上一版用 JS 按 visualViewport 实测写死，
-   换到手机浏览器里 visualViewport 的值不可靠，框被算成 165px（屏的 22%），越算越矮。
-   现在：上面那几块全 flex:none 钉死，正文框 flex:1 自己吃剩下的，键盘弹起时
-   sheet 变矮 → 框跟着缩，永远不会溢出、也不会算错。
-   ⚠ 别再回来写 wrap.style.height：只要内联高度和 flex:1 同时存在，两者会打架。 */
+/* ★★ v2.9（2026-11-14）：高度回到【JS 实测写死】（fitTa → taRoom），这段 CSS 只当兜底。
+   为什么 v2.7 的「纯 CSS flex 吃满」在真机上是错的（别再试第二遍）：
+   编辑页整页包在 <div data-edbox="…"> 里，那一层没有任何 CSS 布局规则 = display:block，
+   .sheet 虽然有 display:flex，但它只认这一个直接子元素，flex 链到它就断了。
+   于是下面的 .sarea / .tawrap 上的 flex:1 无处可分 → 框只剩 min-height:80px。
+   实测 390×844：去掉这层 div 是 628px，留着就是 80px（屏的 9%）—— 他截图里那块空白。
+   ⚠ 别再改成「只靠 flex」：flex 救不了，除非给 [data-edbox] 也补 flex 列 + height:100%
+     （那是另一条可行路线，但主人 2026-11-14 明确选了「JS 实测写死」，别再自作主张换回去）。
+   ⚠ flex:1 留着是有用的：JS 还没跑起来那一瞬、或者 taRoom 量不出来时，屏不塌。 */
 .tawrap{position:relative;flex:1 1 auto;min-height:80px;min-width:0;display:flex}
 /* 正文盒：整页唯一的那一个输入框 */
 .tawrap textarea{
@@ -3437,6 +3439,12 @@ function taRoom() {
     shh = s.offsetHeight || (isFinite(ih) ? ih : 0);
   }
   if (!shh) return 0;
+  /* ★ v2.9：先扣掉 .sheet 自己的上下边框。rect 高度是【含边框】的，
+     而分给里面那几块的是内容区 —— 不扣就正好多算 1px，内容比容器高 1px，
+     于是 .sheet 那条 overflow-y:auto 会当真，整页能滑 1 像素（手指一碰就抖）。
+     ★ 实测（390×844）：不扣 → sheetScroll=1；扣了 → 0，框底距底 7px 刚好。 */
+  shh = shh - cssPx(s, "borderTopWidth", 0) - cssPx(s, "borderBottomWidth", 0);
+  if (shh <= 0) return 0;
   var fixed = 0, i, c, kids;
   /* ① 真正的一层是 [data-edbox]（sheetRender 把整页包在它里面）—— 直接遍历 sheet
      的子节点只会数到这一个壳，上下固定块全漏掉（少扣一整块，框就比能放的高一截）。 */
@@ -3466,9 +3474,22 @@ function fitTa() {
   var s = sheetEl();
   if (!s || !s.classList.contains("on")) return;
   var wrap = s.querySelector(".tawrap"); if (!wrap) return;
-  /* v2.7：什么都不写。高度交给 CSS（flex:1 吃满剩余），见 .tawrap 上的注释。
-     这里只负责把历史版本可能留下的内联高度擦掉，否则它会跟 flex:1 打架。 */
-  if (wrap.style.height) wrap.style.height = "";
+  /* ★★ v2.9（2026-11-14 主人定：回到「JS 实测写死」）———————————————
+     为什么 v2.7/v2.8 那套「纯 CSS flex:1 吃满」在真机上没用：
+     整页包在 `<div data-edbox="…">` 里，而这一层 **一条 CSS 规则都没有**（默认 display:block）。
+     .sheet 是 flex 列，但它只认这一个直接子元素；flex 链到这儿就断了 ——
+     .sarea / .tawrap 上的 flex:1 找不到能分配空间的父级，最后只剩 min-height:80px。
+     实测（390×844，同一份 CSS）：没有这层 div 是 628px；加上这层普通 div **只有 80px（9%）**。
+     这就是他截图里「框矮 + 下面一大块空白」的根因，跟 v2.6 的 165px 完全不是一回事。
+     ⚠ 所以高度必须由 JS 算好写死，不能再指望 flex 自己撑。
+     ⚠ 算的是 sheet 的【实高】（sheetFit 按 visualViewport 写进去的那个，
+       并且扣掉了边框），不是 vh、不是「键盘比例估算」—— 那两种在键盘弹起时都会算错。
+     ⚠ 量不出来（还没渲染好）就一个字都不写：直接 return，别清掉上一次的正确值，
+       也别写个 0 —— 一写 0 就等于框没了。 */
+  var h = taRoom();
+  if (!h || h < 120) return;                          /* 没渲染好 / 实在太矮 → 保持现状 */
+  if (Math.abs((wrap.offsetHeight || 0) - h) <= 2) return;   /* 没变就别动，省一次重排 */
+  wrap.style.height = h + "px";
 }
 /* 键盘弹起 / 收起、转屏都会让可视高变 —— 记下真值并重算一次。
    ★ 只在编辑页生效（fitTa 自己会挡别的页）；60ms 防抖，别跟着键盘动画狂算。 */
