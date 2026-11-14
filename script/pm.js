@@ -12,7 +12,7 @@
      A 预设     列出条目 / 开关 / 就地编辑内容+条目名+角色 / 顶部 token / 开关方案
      B 世界书   整本启停 + 置顶 + 自定义分组；条目三档：禁用 / 关键词 / 常驻
      C 正则     全局 / 局部 / 预设 三组，默认折叠
-     D 消息截图 整条消息存进手机「下载」；相机 / 复制两个图标竖排在气泡右侧
+     D 消息截图 整条消息存进手机「下载」；星 / 相机 / 复制三颗彩色图标横排在气泡正下方
 
    ★★★ 改这个文件之前，先把下面这块读完 —— 都是真踩过的坑和实测数据，
         不是说明书。每加一个新功能，把新踩的坑和量出来的数字补到这里。
@@ -74,13 +74,13 @@
      .sk-shot-wrap.sk-bg-night 必须排在所有 .sk-thm-* **之后**
      （同为 (0,2,0) 权重，顺序就是语义，否则黑底配深色字看不清）。
    · 纯文字兜底图也要跟着 bg 切，不然降级时突然吐一张黑图会像又坏了。
-   · ★★ 图标必须挂 **.mes**（气泡外面那层），不能挂 .mes_text ——
-     酒馆流式输出是**整块重写 .mes_text 内容**，挂里面的图标每吐一段就被冲掉，
-     于是只能每拍重建一次（2026-11-13 他的日志：生成 47 秒补了 18 次）。
-     挂 .mes 后重写碰不到它，生成期间零操作。
-     代价：.mes 底部压着酒馆自带 .mes_buttons，所以 bottom 不写死，
-     由 shotOpsPlace() 实测「气泡底边→.mes 底边」的距离（=按钮那排高度，**与正文长短无关**）
-     把图标顶上去；CSS 里的 44px 只是没渲染出来时的兜底。
+   · ★★ 图标绝不能挂 **.mes_text** —— 酒馆流式输出是**整块重写 .mes_text 内容**，
+     挂里面的图标每吐一段就被冲掉，于是只能每拍重建一次
+     （2026-11-13 他的日志：生成 47 秒补了 18 次）。
+     v2.8 起挂在 **.mes_block 的末尾**：那一层不会被重写，而且它是竖排容器，
+     排在最后就正好落在 .mes_text 下面一行 = 「气泡正下方」，天然占位、不压 .mes_buttons。
+     （v2.8 之前是 absolute 挂 .mes + shotOpsPlace 实测坐标，那套已经删干净，
+       别再往回改：绝对定位到气泡下面就是气泡外面，会直接盖住下一条消息。）
    · ★★ 扫描成本实测（jsdom，300 条消息 / 3.69 万节点 —— 真机 Chrome 的原生选择器更快，
      但趋势一致）：**全扫 36.6 ms/拍**，只查末尾 3 条 0.6 ms。
      2.5 秒一拍的全扫＝长聊天里持续掉帧 → 现在只有「条数变了 / 换聊天 / 开关 / 换主题」才全扫，
@@ -100,10 +100,11 @@
      并在切过去后的 0.7 秒内补两次（用户一动光标立刻收手，绝不抢）。
 
    ── 收藏（v0.8）────────────────────────────────────────────────
-   · 图标列归两项共用：截图（相机 + 复制）与收藏（星）。**各有各的开关**，
-     一项关只摘那几颗，两项都关才整列连容器一起撤（shotOpsSync）。
-     顺序固定【星 → 相机 → 复制】：他说过「复制要更靠下，别误触下一页生成」，
-     新图标一律往前插，复制永远钉在最后一颗（测试里有断言）。
+   · 图标排归两项共用：截图（相机 + 复制）与收藏（星）。**各有各的开关**，
+     一项关只摘那几颗，两项都关才整排连容器一起撤（shotOpsSync）。
+     顺序固定【星 → 相机 → 复制】，新图标一律往前插，复制永远钉在最后一颗（测试里有断言）。
+     ★ v2.8（2026-11-14）主人改口径：从「气泡右侧竖排 + 灰底」改成「气泡正下方横排 +
+       彩色线条（星金 / 相机墨绿 / 复制砖红）」，不再有灰块。见 shotCSS 那段注释。
    · 收藏的 key = 聊天标识 + mesid。**光用 mesid 会串**：每场聊天都从 0 数起，
      不同聊天的第 3 楼会互相当成同一条。出处缓存 _favCtx 在全扫时作废（换聊天就变）。
    · 星的状态一律从收藏夹倒推（favKeys），**不许信 DOM 上的 class** ——
@@ -180,7 +181,7 @@
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v2.5";
+var APP = "预设管理器", VER = "v2.8";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -850,11 +851,13 @@ var panelOpen = false;
    开关一条没变、条目一条没少 —— 只有顺序被按开关状态重排过。
    这类坏法很隐蔽（看着像排序，其实是顺序表被重写了），所以要留一只眼睛盯着。 */
 var ordWarn = null;
-/* ★ v2.5：编辑页底栏「名字 / 角色」是收着还是开着。
-   放在外面记着，是因为 sheetRender() 会整页重画（查找条一开一关就重画一次）——
-   状态若只挂在 DOM 上，重画一次就自己收起来了，他正在改名时会被打断。
-   ⚠ 换一条条目进编辑页要复位（见 sheetShow），别把上一条的展开状态带过来。 */
-var sftOpen = false;
+/* ★ v2.5：编辑页「名字 / 角色」那块是展开还是收起。
+   ★ v2.6（2026-11-14）改成默认【展开】：这一块已经从屏幕最底搬到正文框上方
+     （主人要求「框贴键盘上沿」），搬上去还收着的话，一眼只看见一条细条，
+     他会以为是空的。展开两行、位置在框上面，这就是他要的形态。
+   ⚠ 状态必须记在 DOM 外面：sheetRender() 会整页重画（查找条一开一关就重画一次），
+     挂在 DOM 上的状态重画一次就自己收起来了。 */
+var sftOpen = true;
 var ORD_K = "ord";   /* localStorage 键名（ls/lsSet 会自动加 sk_pm_ 前缀 → 实际存 sk_pm_ord），
                         内容是各预设「上一次正常顺序」的快照，用来一键还原 */
 
@@ -2288,9 +2291,9 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
 /* 正文区：占掉全部剩余高度，自己滚 —— 名字那一栏永远不被它挤走 */
 /* ★ 2026-11-13 他要求「条目编辑框上下更高」：上下内边距 10/8 → 6，左右 12 → 10，
    间距 8 → 7。正文框能多出 2~3 行。别再改回 12 —— 手机上一行就少几个字。
-   ★ flex 从「1」(=1 1 0%) 改成「1 0 auto」：正文框有 min-height 44vh 的下限，
-     这一块必须【不许被压扁】，压扁就会跟底栏叠在一起；高过可视区时由 .sheet 整体滚。 */
-.sarea{flex:1 0 auto;min-height:0;padding:6px 10px 6px;display:flex;flex-direction:column;gap:7px}
+   ★ v2.7（2026-11-14）：flex 从「1 0 auto」改成「1 1 auto」—— 现在正文框是 flex:1
+     吃满剩余空间，键盘弹起时这一块必须允许收缩，否则整页比 sheet 高、底部被裁。 */
+.sarea{flex:1 1 auto;min-height:0;padding:6px 10px 6px;display:flex;flex-direction:column;gap:7px}
 /* 「正文」标签 + 快捷输入挤一行（各占一行的话正文框就被顶下去一截） */
 .sarea .shead{display:flex;align-items:center;gap:7px;flex:none;min-width:0}
 .sarea .shead .slb{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2320,7 +2323,14 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
    他明确说了：查找条和底栏【都不要收】。所以不动那两块，改成给正文框钉一个下限。
    ★ 这里用 vh 是有意的：vh 量的就是「键盘没弹时的视口」= 一个不会随键盘变的基准，
      正好当「最少给我这么多行」的尺子。高度不够时由 .sheet 纵向滚动兜底（它本来就能滚）。 */
-.tawrap{position:relative;flex:1;min-height:110px;min-width:0;display:flex}
+/* ★★ v2.7（2026-11-14 主人定）：正文框改成【纯 CSS 固定布局】—— flex 吃满剩余空间，
+   JS 不再算高度、不再写内联高度。
+   原因（他原话）：「感觉还是固定的好」—— 上一版用 JS 按 visualViewport 实测写死，
+   换到手机浏览器里 visualViewport 的值不可靠，框被算成 165px（屏的 22%），越算越矮。
+   现在：上面那几块全 flex:none 钉死，正文框 flex:1 自己吃剩下的，键盘弹起时
+   sheet 变矮 → 框跟着缩，永远不会溢出、也不会算错。
+   ⚠ 别再回来写 wrap.style.height：只要内联高度和 flex:1 同时存在，两者会打架。 */
+.tawrap{position:relative;flex:1 1 auto;min-height:80px;min-width:0;display:flex}
 /* 正文盒：整页唯一的那一个输入框 */
 .tawrap textarea{
   flex:1;width:100%;min-height:0;box-sizing:border-box;
@@ -2410,10 +2420,16 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
 .sarea>textarea.half{flex:none;height:96px;min-height:70px}
 .slb{font-size:10.5px;color:var(--ink3);letter-spacing:.5px;flex:none}
 /* 底栏：名字 / 角色 / 关键词 / 计数 —— 钉死在键盘上沿
-   ★ 2026-11-13：上下 9 → 7、左右 12 → 10（他说编辑框要更高，这几像素就是白给正文的） */
+   ★ 2026-11-13：上下 9 → 7、左右 12 → 10（他说编辑框要更高，这几像素就是白给正文的）
+   ⚠ 这一条是【世界书页 / 正则页】的底栏，别动它的方向和 safe-area。 */
 .sft{flex:none;padding:7px 10px calc(7px + env(safe-area-inset-bottom));
   border-top:1px solid var(--line2);background:var(--paper2);
   display:flex;flex-direction:column;gap:6px}
+/* ★ v2.6（2026-11-14）：预设编辑页那一块【搬到正文框上方】了，所以它不贴屏幕底，
+   要单独一套：线改到下面、去掉 safe-area。只给带 .ontop 的那一个用，
+   世界书 / 正则页仍是上面那条底栏，一个像素都没变。 */
+.sft.ontop{padding:6px 10px 6px;border-top:none;border-bottom:1px solid var(--line2)}
+.sft.ontop.fold{padding-top:4px;padding-bottom:4px}
 .srow{display:flex;align-items:center;gap:8px}
 .srow>.lb{flex:none;width:34px;font-size:10.5px;color:var(--ink3)}
 /* ── 底栏收起态（v2.5）────────────────────────────────────────────
@@ -3450,11 +3466,9 @@ function fitTa() {
   var s = sheetEl();
   if (!s || !s.classList.contains("on")) return;
   var wrap = s.querySelector(".tawrap"); if (!wrap) return;
-  var h = taRoom();
-  if (!h) return;                                  /* 量不出来就别乱写高度 */
-  if (h < 96) h = 96;                              /* 兜底下限：再挤也要能看见几行 */
-  if (Math.abs((wrap.offsetHeight || 0) - h) <= 2) return;
-  wrap.style.height = h + "px";
+  /* v2.7：什么都不写。高度交给 CSS（flex:1 吃满剩余），见 .tawrap 上的注释。
+     这里只负责把历史版本可能留下的内联高度擦掉，否则它会跟 flex:1 打架。 */
+  if (wrap.style.height) wrap.style.height = "";
 }
 /* 键盘弹起 / 收起、转屏都会让可视高变 —— 记下真值并重算一次。
    ★ 只在编辑页生效（fitTa 自己会挡别的页）；60ms 防抖，别跟着键盘动画狂算。 */
@@ -3489,7 +3503,7 @@ function sheetShow(kind) {
      之后再改状态也不会自己重画（真踩过：点搜索结果进来查找条是收着的）。 */
   if (kind === "p") {
     fBar.undo = null;
-    sftOpen = false;                 /* 换一条进来 → 底栏回到收起态（正文框先给满） */
+    sftOpen = true;                  /* v2.6：换一条进来 → 名字/角色保持展开（它已在框上方） */
     /* 有搜索词 → 摊开并定位；没有（直接从列表点进来）→ 收起，别拿上次的词打扰人。
        但词本身留着：点一下「查找」还能接着用。 */
     if (findQ) { fBar.q = findQ; fBar.on = true; } else { fBar.on = false; }
@@ -3763,6 +3777,18 @@ function sheetPreset() {
   return '<div data-edbox="' + it.id + '">'
     + sheetHead(nm || "（没名字的条目）")
     + fBarHTML()
+    /* ★★ v2.7（2026-11-14 主人定）：
+       ① 整块从屏幕最底搬到正文框上方（底栏钉在框下面就永远贴不到键盘上沿）。
+       ② 名字 / 角色**并成一列**（同一行）：左「角色」下拉，右「名字」输入框。
+          原来两整行 + 一条可折叠标题行，白吃 70 多像素；并成一行，全给正文框。
+       原话：「把名字和角色搞成一列的……这样输入框的那个也能高一点」。 */
+    + '<div class="sft ontop" data-sft="1">'
+    +   '<div class="srow onerw">'
+    +     '<span class="lb">角色</span>' + roleSelect(it.id, rl)
+    +     '<span class="lb">名字</span>'
+    +     '<input type="text" data-nm="' + it.id + '" value="' + escAttr(nm) + '" placeholder="条目名">'
+    +   "</div>"
+    + "</div>"
     + '<div class="sarea">'
     /* 标签和快捷输入挤在同一行：之前各占一行，正文框就被顶下去一截 */
     +   '<div class="shead">'
@@ -3770,27 +3796,12 @@ function sheetPreset() {
     +     '<span class="grow"></span>'
     +     macroRow(it.id, true)
     +   "</div>"
-    +   '<div class="tawrap">'
-    +     '<textarea data-ta="' + it.id + '" spellcheck="false" placeholder="写点什么…">' + esc(ct) + "</textarea>"
-    +   "</div>"
+    /* ★ v2.6：计数行也挪到框【上面】。它原来横在框下面，框底同样贴不到键盘上沿。 */
     +   '<div class="smeta"><span>停手一秒自动存</span><span class="grow"></span>'
     +     '<span class="stok" data-cnt="' + it.id + '">' + fmt(tokOf(ct)) + " tok</span>"
     +   "</div>"
-    + "</div>"
-    /* ★ v2.5：底栏「名字 / 角色」默认收成一条 —— 他 2026-11-14 定：
-       正文框要一直撑到键盘上沿，这两栏挡在中间就只能让。点一下这条才展开。
-       ★ 收起来时这条【不许高】：它是正文框唯一的对手，高度全从它身上省。 */
-    + '<div class="sft' + (sftOpen ? "" : " fold") + '" data-sft="1">'
-    +   '<button type="button" class="ftg" data-ftg="1">'
-    +     '<span class="ftk">名字</span><b class="ftv">' + esc(nm || "（未命名）") + "</b>"
-    +     '<span class="ftk">角色</span><b class="ftv ftw">' + esc(rl || "system") + "</b>"
-    +     '<span class="grow"></span><span class="ftx">' + (sftOpen ? "收起" : "展开") + "</span>"
-    +   "</button>"
-    +   '<div class="ftb">'
-    +   '<div class="srow"><span class="lb">名字</span>'
-    +     '<input type="text" data-nm="' + it.id + '" value="' + escAttr(nm) + '" placeholder="条目名"></div>'
-    +   '<div class="srow"><span class="lb">角色</span>' + roleSelect(it.id, rl)
-    +     '<span class="grow"></span><span class="smeta">停手一秒自动存</span></div>'
+    +   '<div class="tawrap">'
+    +     '<textarea data-ta="' + it.id + '" spellcheck="false" placeholder="写点什么…">' + esc(ct) + "</textarea>"
     +   "</div>"
     + "</div></div>";
 }
@@ -5226,7 +5237,8 @@ function closePanel() {
 
 /* =====================================================================
    消息截图（2026-11-03 他拍板的完整需求）
-     · 每条酒馆消息右下角两个小图标：相机＝整条消息截成图片，方块＝复制文字
+     · 每条 AI 消息正下方横排三颗彩色图标：星＝收藏、相机＝整条消息截成图片、方块＝复制文字
+       （v2.8 起；以前是气泡右侧竖排两个 + 灰底块）
      · 存的位置＝手机「下载」文件夹。★ 绝不在应用目录留副本 —— 他旧版就栽在
        「明明只该进下载，应用系统目录也堆了一堆图」。所以这版全程内存 blob →
        浏览器下载管理器，不落临时文件、截完即从内存释放。
@@ -5356,14 +5368,10 @@ function shotCSS() {
     st.id = "sk-shot-css";
     st.textContent =
       ".mes{position:relative}" +
-      /* ★★ 图标挂在 .mes（气泡外面那一层），不是 .mes_text 里面 —— 2026-11-13 改。
-         以前挂 .mes_text 是为了躲开 .mes_buttons，但代价极大：酒馆流式输出时是
-         **整块重写 .mes_text 的内容**，挂在里面的图标被一起冲掉 → 只能每拍重建一次
-         → 他那份日志里几十条「补挂」就是这个死循环（生成 47 秒补了 18 次）。
-         .mes 这一层不会被重写，图标挂上去就一直活着，生成期间完全不用管。
-         ⚠ 代价回来了：.mes 底部有酒馆自带的 .mes_buttons 那排 —— 所以 bottom 不写死，
-           由 shotOpsPlace() 实测「气泡底边到 .mes 底边」的距离（正好是按钮那排的高度）
-           把图标顶上去。CSS 里这个 44px 只是没渲染出来时的兜底值。 */
+      /* ★★ 图标挂 .mes_block 末尾（不是 .mes_text 里）—— 2026-11-13 的教训：
+         酒馆流式输出会**整块重写 .mes_text 的内容**，挂里面的图标被一起冲掉，
+         只能每拍重建（生成 47 秒补了 18 次）。
+         v2.8 起挂在 .mes_block 这个竖排容器的末尾 → 正好在气泡下面一行。 */
       /* ★★ 2026-11-13 他报「非常卡 / 点星卡住」——图标列这里踩了一个安卓 WebView 的大坑：
          原来是 opacity:.5 + transition，**每个图标都会单独合成一层**。聊天 300 条 × 3 颗
          = 900 个半透明合成层，滚动和打开面板时 GPU 要一层层贴，必卡。
@@ -5373,17 +5381,35 @@ function shotCSS() {
          最底，再按【酒馆那排按钮的实测左边界】左右错开，两层永不重叠；
          ②「这些按钮给我调小一点，要更小一点」→ 27 → 20px，里面的图标 14 → 12px。
          20px 是手指还能点中的下限，别再往下调（再小就点不中，误触生成）。 */
-      ".sk-shot-ops{position:absolute;right:8px;bottom:2px;display:flex;flex-direction:column;gap:4px;z-index:14;contain:layout style}" +
-      ".sk-shot-ops i{width:20px;height:20px;border-radius:7px;display:flex;align-items:center;justify-content:center;" +
-        "cursor:pointer;background:rgba(22,22,28,.42)}" +
-      ".sk-shot-ops i:hover{background:rgba(22,22,28,.62)}" +
+      /* ★★ v2.8（2026-11-14 主人定）：三个图标从「气泡右侧竖排 + 深灰圆角块」
+         改成「气泡正下方居中横排 + 彩色线条图标」。原话：
+           「你是竖着在底部的，我希望你把它变成横着在底部，然后颜色不要搞那种灰色，
+             就相当于改成那种小图标一样，有颜色的」。
+         ★ 为什么必须改成文档流（position:static）：
+           绝对定位到气泡"正下方"其实是气泡外面，会直接盖住下一条消息；
+           只有排在 .mes_block 末尾、实实在在占一行高度，才叫「正下方」。
+           所以 shotOpsMake 现在把节点挂到 .mes_block，不再是 .mes。
+         ★ 点击区仍是 20px（他说过再小就点不中、会误触生成），只是不再有底块。 */
+      ".sk-shot-ops{display:flex;flex-direction:row;justify-content:center;align-items:center;" +
+        "gap:18px;margin:5px 0 1px;z-index:14;contain:layout style}" +
+      ".sk-shot-ops i{width:20px;height:20px;display:flex;align-items:center;justify-content:center;" +
+        "cursor:pointer;background:none;border:none;padding:0}" +
       ".sk-shot-ops i:active{transform:scale(.9)}" +
       /* 管理器面板一开就把图标列整列藏掉：面板是全屏遮罩，底下的聊天本来也看不见，
          留着它 = 开着面板还要合成这几百层。关面板立刻回来（这个类是加在 <html> 上的）。 */
       ".sk-pm-open .sk-shot-ops{display:none}" +
-      /* 收藏那颗：已收藏 = 实心金（空心/实心一眼分得清，不靠颜色深浅） */
-      ".sk-shot-ops i.sk-fv.on svg{fill:#f2c14e;stroke:#f2c14e}" +
-      ".sk-shot-ops svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}" +
+      /* 彩色图标：星＝金 / 相机＝墨绿 / 复制＝砖红（跟皮肤 --accent 一套色，不用灰块）。
+         收藏那颗已收藏＝实心金（空心/实心一眼分得清，不靠颜色深浅）。 */
+      ".sk-shot-ops svg{width:15px;height:15px;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}" +
+      ".sk-shot-ops i.sk-fv svg{stroke:#c19a2e}" +
+      ".sk-shot-ops i.sk-sh svg{stroke:#2f6b52}" +
+      ".sk-shot-ops i.sk-cp svg{stroke:#9c4a35}" +
+      ".sk-shot-ops i.sk-fv.on svg{fill:#e0b040;stroke:#e0b040}" +
+      /* 夜间底色下这三档深色线条看不清 → 换同色系浅一档 */
+      ".sk-bg-night .sk-shot-ops i.sk-fv svg{stroke:#e8c06a}" +
+      ".sk-bg-night .sk-shot-ops i.sk-sh svg{stroke:#7ec98f}" +
+      ".sk-bg-night .sk-shot-ops i.sk-cp svg{stroke:#d98b74}" +
+      ".sk-bg-night .sk-shot-ops i.sk-fv.on svg{fill:#f2c14e;stroke:#f2c14e}" +
       /* 卡片 */
       ".sk-thm-card .mes_text{background:#fdfbf5;color:#3a3226;border-radius:6px;border-left:4px solid #b8944a;" +
         "padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.35)}" +
@@ -5434,8 +5460,12 @@ function shotOpsMake(m) {
   var ops = pdoc.createElement("div");
   ops.className = "sk-shot-ops";
   /* ★★ 挂 .mes 直接子节点（不放 .mes_text）。理由见 shotCSS 里的说明：
-     气泡内容会被流式输出整块重写，挂里面的图标活不过一段输出。 */
-  m.appendChild(ops);
+     气泡内容会被流式输出整块重写，挂里面的图标活不过一段输出。
+     ★ v2.8（2026-11-14）改成挂 .mes_block 末尾：图标要「气泡正下方横排」，
+       排在 .mes_block 的最后一个子节点上，正好落在 .mes_text 下面一行，天然占位不重叠。
+       找不到 .mes_block 就退回 .mes（老版本 DOM 兜底）。 */
+  var host = m.querySelector(".mes_block") || m;
+  host.appendChild(ops);
   try { shotOpsPlace(m, ops); } catch (eP) { }
   return ops;
 }
@@ -5558,27 +5588,15 @@ function shotOne(m) {
         只认「贴着右边、竖着的窄列」（宽度 < 消息宽的 45%）：有些主题那排是整行宽的，
         那种情况硬挪会把图标甩到消息左边去 —— 量不准就不动，宁可按 right:8px 叠一点点。
    返回 true ＝ 这次真量出来了。量不出来（还没排版好）就别盖标记，下一拍再补一次。 */
+/* ★ v2.8（2026-11-14）：图标改成「气泡正下方居中横排」的文档流布局后，
+   这里不再需要算 right / bottom（那套是给绝对定位竖排用的）。
+   只负责：① 擦掉老版本可能写死的内联坐标，否则它会跟新布局打架；
+           ② 打上 data-skpl（外面靠这个标记判断"这条已经摆过位"，别每拍重复干）。
+   函数名和签名保持不动 —— 注册表 shot.place 和测试都按这个名字调。 */
 function shotOpsPlace(m, ops) {
-  if (!m || !ops || !m.getBoundingClientRect) return false;
-  var mr = m.getBoundingClientRect();
-  if (!mr.height || !mr.width) return false;          /* 还没渲染出来 → 用 CSS 兜底值 */
-  ops.style.bottom = "2px";
-  var right = 8;
-  var btns = m.querySelector(".mes_buttons");
-  if (btns && btns.getBoundingClientRect) {
-    var br = btns.getBoundingClientRect();
-    if (br.width > 2 && br.height > 2 && br.width < mr.width * 0.45) {
-      var r = Math.round(mr.right - br.left) + 6;
-      if (r > 8) right = r;
-    } else if (!br.width && !br.height) {
-      /* 那排这会儿藏着（酒馆是「点一下才显出来」）→ 按一列的宽度先给它留好位置。
-         不留的话，他一按消息、那排冒出来，正好又盖住最下面那颗复制。 */
-      right = 42;
-    }
-  }
-  var maxR = Math.round(mr.width) - 26;               /* 20px 图标 + 6px 余量：不许挤出左边界 */
-  if (maxR > 8 && right > maxR) right = maxR;
-  ops.style.right = right + "px";
+  if (!m || !ops) return false;
+  ops.style.right = "";
+  ops.style.bottom = "";
   ops.setAttribute("data-skpl", "1");
   return true;
 }
@@ -5593,11 +5611,20 @@ function shotOpsPlace(m, ops) {
      只给视口内加的话，老消息滑上来会当场变色，闪一下更难看。 */
 var SHOT_NEAR = 4;        /* 最新几条常驻挂图标（他定的 4） */
 var SHOT_PAD = 260;       /* 视口上下各预留的预热距离（px）：快滑到的提前挂好，滚起来不空一截 */
-/* 摘掉一条消息的图标列（滑出视口时用）。返回 1＝真摘了。 */
+/* 摘掉一条消息的图标（滑出视口时用）。返回 1＝真摘了。
+   ★★ v2.8（2026-11-14）改成【只清空里面的图标，容器 .sk-shot-ops 留着】。
+      以前是 absolute 定位，删整列不影响布局；现在图标排在文档流里、每条占一行高度，
+      删掉容器 = 这条消息当场矮 26px → 手指一滑列表就上下抖（滑出再滑回来还闪一下）。
+      空容器仍然撑着那 26px，节点却只剩 1 个 div，性能目的照样达到。 */
 function shotStrip(m) {
-  var ops = m.querySelector ? m.querySelector(".sk-shot-ops") : null;
-  if (ops) { try { ops.remove(); } catch (e) {} return 1; }
-  return 0;
+  var ops = m && m.querySelector ? m.querySelector(".sk-shot-ops") : null;
+  if (!ops) return 0;
+  var got = 0;
+  try {
+    while (ops.firstChild) { ops.removeChild(ops.firstChild); got = 1; }
+    ops.removeAttribute("data-skpl");
+  } catch (e) { }
+  return got;
 }
 /* 只处理「最新 SHOT_NEAR 条 + 视口内（含预热带）」。返回「动过的消息条数」。
    ★ 返回值口径跟老 shotScan 一致（按条数，不按图标颗数），心跳日志接着用。 */
@@ -7317,9 +7344,9 @@ function renderShot() {
   var logs = shotLogs();
   el.innerHTML = '<div class="exwrap">'
     + '<div class="exlb1">怎么用</div>'
-    + '<div class="exhint">每条消息<b>右侧竖着两个</b>小图标：上面<b>相机</b>把<b>这一条</b>对话存成图片，'
-    +   '下面<b>方块</b>复制这条消息的文字（竖排是为了不跟下面那排「继续 / 下一页生成」挨在一起，'
-    +   '免得点复制点错触发生成）。<br>只截你点的那一条，不会把整个聊天都截进去。</div>'
+    + '<div class="exhint">每条消息<b>正下方横着三颗</b>小图标：<b style="color:#c19a2e">星星</b>收藏这一条（再点取消）、'
+    +   '<b style="color:#2f6b52">相机</b>把<b>这一条</b>对话存成图片、'
+    +   '<b style="color:#9c4a35">方块</b>复制这条消息的文字。<br>只截你点的那一条，不会把整个聊天都截进去。</div>'
     + '<div class="exlb1">图片存到哪</div>'
     + '<div class="exhint">进手机「下载」文件夹。<b>不写酒馆自己的目录（data 那些）、不留临时文件</b>，'
     +   '全程在内存里，截完就释放。</div>'
