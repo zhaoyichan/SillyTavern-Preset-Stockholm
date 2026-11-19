@@ -13,6 +13,8 @@
      B 世界书   整本启停 + 置顶 + 自定义分组；条目三档：禁用 / 关键词 / 常驻
      C 正则     全局 / 局部 / 预设 三组，默认折叠
      D 消息截图 整条消息存进手机「下载」；星 / 相机 / 复制三颗彩色图标横排在气泡正下方
+     E 建议导入 把模型给的建议贴进来 → 逐条对照勾选 → 应用 / 撤销；外加本地体检
+                （入口是顶栏那颗小星，只在预设页出现）
 
    ★★★ 改这个文件之前，先把下面这块读完 —— 都是真踩过的坑和实测数据，
         不是说明书。每加一个新功能，把新踩的坑和量出来的数字补到这里。
@@ -86,6 +88,23 @@
      2.5 秒一拍的全扫＝长聊天里持续掉帧 → 现在只有「条数变了 / 换聊天 / 开关 / 换主题」才全扫，
      其余走 lastElementChild 往前数 3 个，**一次 querySelectorAll 都不跑**（测试里有断言）。
      条数用 chat.children.length 判（HTMLCollection 长度是缓存的，几乎零成本）。
+
+   ── 列表 / 排序 / 分组（v3.1，2026-11-19 真机翻车后补）──────────────
+   · ★★★ 拖拽排序只能在【全量列表】用。dragEnd 是拿 DOM 里看得见的行拼新顺序的；
+     搜索 / 筛选后只有一部分行在 DOM 里 → 命中那几行被提到最前、其余按原相对位置后缀
+     → 他原话「我搜索的时候不小心给调了一下，全部都变了」。
+     现在三道锁：① findQ / tab!=="all" 时连把手都不渲染 ② dragStart 里挡住并说明
+     ③ dragEnd 里核「把手数 === 有 identifier 的条目数」，对不上就不写、只提示。
+   · 分组只是标签（members 存 identifier），但会写进 preset.extensions.sk_pm.groups；
+     分组视图「组在前、未分组在后」只是【显示顺序】，别让它进 prompt_order。
+   · 分组模式原来只有底部工具行一个「取消」，条目一多要滚到最底才看见 → 他「找不到退出」。
+     现在列表顶上有 .pgbar（退出 / 收录 / 移出都在上面，不用滚）。
+   · 分组必须能「改名 / 移出单条 / 解散一个 / 全部拆掉」——以前只有「收录 + 解散」，
+     他原话是「分组也没办法改了」。
+   · ★ 列表每次重画都按序播 rowIn 淡入（最多 180ms 延迟）：拖一次顺序整屏淡入一次，
+     就是他说的「慢慢吞吞」。本地小改动（拖顺序、点开关）走 skipRowAnim，不播。
+   · ★★ 正文框高度 v3.1 起【锁死】：进去那一刻量一次（taLock），键盘弹不弹都不再改。
+     以前每次键盘弹起都重算、框跟着长缩，他嫌抖。重新计算只有一个时机：关掉重进。
 
    ── 条目编辑页（2026-11-13 修的两个真机问题）──────────────────────
    · ★「点一下正文，全屏突然变成一条窄缝」的根因：点正文 = 切编辑态 → 键盘弹起 →
@@ -170,9 +189,29 @@
    · ⚠ 别把 shotNear 改回「全量 shotOne」——那正是 900 节点的老路。
      新增消息时仍走 shotRescan 的「末尾 3 条增量」，那条路一次 querySelectorAll 都不跑。
 
+   ── 导入建议 / 体检（v3.0，2026-11-18）────────────────────────────
+   · 他要的链路是：正文里问模型 → 把它那段话复制过来 → 逐条对照打勾 → 应用。
+     ★ 心脏【不是自动改】，是「他自己勾」。别做成「一键全改」——那正是他否掉的。
+   · 定位【主靠原句、次靠名字】：模型看不到条目标题，它只看到拼好的 prompt 正文，
+     所以它会引用原文、不会说「第 12 条」。名字只在原句对不上时当加分项。
+   · 对不上就【不猜】：idf 留空、默认不勾。套错一条比没改更糟 —— 他会以为改好了。
+   · pend 里存 identifier，绝不存 itX：itX 是 applyPresetRaw 按 index 重编的，
+     换一次预设 / 重启一次就全错位（跟收藏用 mesid 串号是同一类坑）。
+   · 先在本地落 pend，点应用才碰 items，写之前备份到 sk_pm_bakpd。
+     应用走的还是原来 save() 那条防抖写回，绝不另开一条写回路径（会绕开 applyTo 的保护）。
+   · 解析顺序不能反：先认格式块（免费、确定），认不出才调 AI（花钱、可能编）。
+   · AI 通道优先走酒馆 /api/backends/chat-completions/generate：同源、不跨域，
+     而且用他酒馆里配好的模型，连 key 都不用填。直连只当兜底。
+   · ★ 预览踩过的坑：全站颜色变量都定义在 :host 里。写静态预览页时如果不把
+     `:host` 换成 `:root`，var(--ink) 一条都取不到 → 整页变成浏览器默认色，
+     看着像「配色全错了」，其实是假象（2026-11-18 我为此白改了一轮）。
+   · ★ 截图核对布局要用 --dump-dom 先量 rect：Windows 显示缩放会让
+     `--window-size=390` 实际得到 innerWidth=492，图只截了左边一部分，
+     看着像「右边被裁了」，其实布局是好的。
+
    ── 测试 ────────────────────────────────────────────────────────
    · 每次改完跑 `node _smoke_manager.js`（失败数必须为 0）与 `node _t_json.js`。
-     基线（v1.1）：**481 通过 / 0 失败**；JSON **37 / 0**。
+     基线（v3.0）：**604 通过 / 0 失败**；JSON **37 / 0**。
    · 测试里禁止固定 setTimeout，一律 waitFor；静态断言**先剥注释**再匹配
      （注释里出现过的函数名 / CSS 串把自己坑过两次）。
    · 更新逻辑用「假网络 + 假脚本库」测（R.w.fetch / SillyTavern.getContext 现场替换），
@@ -181,7 +220,7 @@
 (function () {
 "use strict";
 
-var APP = "预设管理器", VER = "v2.9";
+var APP = "预设管理器", VER = "v3.1";
 var PFX = "sk_pm_";                       /* localStorage 前缀 */
 var EXT = "sk_pm";                        /* 预设里的 extensions 字段名 */
 
@@ -845,6 +884,11 @@ var dirty = false;
 var editingId = null;  /* 正在就地编辑的条目 id（预设 / 正则 共用） */
 var draft = null;      /* 正在编辑但还没保存的内容（防止重渲染把字吃掉） */
 var tab = "all";
+/* ★ v3.1（2026-11-19 他嫌「顺序改的时候慢慢吞吞」）：
+   每次重画整份列表都会把 70 行按序做一次 rowIn 淡入 + 最多 180ms 的延迟；
+   拖一下顺序就整屏重新淡入一次，看起来就是「慢半拍」。
+   所以：只有「换页签 / 首次进列表」才播动画；本地小改动（拖顺序、点开关）一律不播。 */
+var skipRowAnim = false;
 var panelOpen = false;
 /* ★ v2.4 顺序自检：order 被打成「开着的全在前、关着的全在后」时记在这里（null = 没发现）。
    2026-11-14 他报「全部条目的顺序被异化」：导出的预设里 23 条开的挤在前面、47 条关的甩在后面，
@@ -1262,6 +1306,481 @@ function applyTo(preset) {
     preset.extensions[EXT] = x;
   } catch (e) {}
   return preset;
+}
+
+/* =====================================================================
+   AI 建议导入 · 本地体检（v3.0，2026-11-18）
+   ── 他为什么要这个 ────────────────────────────────────────────────
+   · 原话：「我在正文里遇到一个问题，然后我就觉得很疑惑，为什么他要这么做，
+     然后我就会在正文问他为什么要这么搞，以及能改的方向是什么……他提出的建议
+     不一定是全部都可以的，所以我也需要观看，所以逐条确认，并且可以编辑，
+     可以选择哪些打勾哪些不勾。」
+   → 所以这里的心脏【不是自动改】，是「逐条对照 + 你自己勾」。别把它做成
+     「一键全改」——那正好是他明确否掉的那一版。
+
+   ── 链路 ─────────────────────────────────────────────────────────
+   ① 他在正文里问模型（模型本来就在用这个预设，所以【不用】另外发清单）
+   ② 把模型那段话复制过来，粘进「导入建议」
+   ③ 先认格式块（免费、快）；认不出才调 AI 解析（花钱、也可能错）
+   ④ 全屏对照页：旧 / 新上下对照，逐条勾选、可以就地改字、可以换目标条目
+   ⑤ 应用前自动备份，应用后能一键撤销
+
+   ── 关键取舍（想改先看这几条）─────────────────────────────────────
+   · 定位【主靠原句、次靠名字】：模型不知道条目叫什么名（它看到的是拼好的
+     prompt 正文，不是条目标题），但它会引用原文。所以原句是主证，名字只加分。
+   · 对不上就【不猜】。宁可留空让他手动挑，也不许按「看起来像」硬套 ——
+     套错一条比没改更糟，因为他会以为已经改好了。
+   · 解析结果一律只是【候选】，必须过对照页、必须他打勾。
+   · 永不直接写预设：先落 pend（localStorage），点应用时才碰 items，写之前先备份。
+   · pend 里存 identifier，不存 itX —— itX 是每次 readPreset 按 index 重编的，
+     重启一次就全错位（跟收藏那条 mesid 串号的坑同一类）。
+   ===================================================================== */
+var PDK = { ai: "ai", pend: "pend", txt: "aitxt", bak: "bakpd" };
+var aiCfg = { ch: "auto", base: "https://api.openai.com/v1", key: "", model: "gpt-4o-mini" };
+var pend = [];          /* 待应用的改动 */
+var pdTxt = "";         /* 上次粘贴的原文（重开还在，不用重新找） */
+var pdTab = "cmp";      /* 全屏页两态：in＝粘贴 / cmp＝对照 */
+var pdBusy = false, pdErr = "", pdNote = "";
+var PDSEL = 0.31;       /* 定位门槛：低于这个分数一律当「没找到」 */
+
+function pdCfgLoad() {
+  var c = lsJSON(PDK.ai, null);
+  if (c && typeof c === "object") {
+    if (c.ch) aiCfg.ch = String(c.ch);
+    if (c.base) aiCfg.base = String(c.base);
+    if (c.key) aiCfg.key = String(c.key);
+    if (c.model) aiCfg.model = String(c.model);
+  }
+  pdTxt = ls(PDK.txt, "") || "";
+  var p = lsJSON(PDK.pend, null);
+  pend = [];
+  if (Array.isArray(p)) {
+    for (var i = 0; i < p.length; i++) {
+      var x = p[i];
+      if (x && x.k && x.id) pend.push(x);
+    }
+  }
+}
+function pdCfgSave() { lsSetJSON(PDK.ai, aiCfg); }
+function pdSave() { lsSetJSON(PDK.pend, pend); }
+function pdCount() { var n = 0; for (var i = 0; i < pend.length; i++) if (pend[i].on) n++; return n; }
+
+function pdByIdf(idf) {
+  if (!idf) return null;
+  for (var i = 0; i < items.length; i++) if (items[i].identifier === idf) return items[i];
+  return null;
+}
+function pdByNm(nm) {
+  nm = String(nm || "").trim(); if (!nm) return null;
+  for (var i = 0; i < items.length; i++) if (items[i].name === nm) return items[i];
+  return null;
+}
+/* 目标条目：先认 identifier（稳定），认不到再退回名字（手改过 identifier 时兜底） */
+function pdTarget(p) { return pdByIdf(p && p.idf) || pdByNm(p && p.nm); }
+/* 归一化：去空白、标点统一、小写 —— 直接复用搜索那套，绝不另造一套（#46） */
+function pdN(s) { return tightMap(String(s == null ? "" : s)).t; }
+
+/* ── 定位：拿「模型引用的原句」去 items 里找 ──────────────────────
+   打分口径（都是实测调出来的，别凭感觉改）：
+     1.00  原句归一后整段出现在正文里（最硬的一条）
+     0.55× 覆盖率 —— 模型改写 / 加省略号时，按 8 字窗算命中比例
+     0.92  条目名完全一样（名字 < 3 字时降到 0.7，太短容易撞）
+     0.60  名字互相包含
+   门槛 PDSEL=0.31。低于它宁愿空着，也不许瞎套。 */
+function pdLocate(snippet, name) {
+  var sn = pdN(snippet), nm = pdN(name), out = [], i;
+  for (i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!it.content && !it.name) continue;
+    var c = pdN(it.content), n = pdN(it.name), sc = 0;
+    if (sn.length >= 8 && c) {
+      if (c.indexOf(sn) >= 0) sc = 1;
+      else {
+        var tot = 0, hitN = 0, step = Math.max(1, Math.floor(sn.length / 30));
+        for (var p = 0; p + 8 <= sn.length; p += step) {
+          tot++; if (c.indexOf(sn.substr(p, 8)) >= 0) hitN++;
+        }
+        if (tot && hitN) sc = 0.55 * (hitN / tot);
+      }
+    } else if (sn.length >= 4 && c && c.indexOf(sn) >= 0) {
+      sc = 0.8;
+    }
+    if (nm.length >= 2) {
+      if (n === nm) sc = Math.max(sc, nm.length >= 3 ? 0.92 : 0.7);
+      else if (n.length >= 3 && nm.length >= 3 && (n.indexOf(nm) >= 0 || nm.indexOf(n) >= 0)) sc = Math.max(sc, 0.6);
+    }
+    if (sc > PDSEL) out.push({ idf: it.identifier, nm: it.name, sc: Math.round(sc * 100) / 100 });
+  }
+  out.sort(function (a, b) { return b.sc - a.sc; });
+  return out;
+}
+
+/* ── 格式块解析 ────────────────────────────────────────────────────
+   认这三种行首标记（全角/半角、带不带【】、带不带冒号都认）：
+     条目：世界观        /  【条目】世界观
+     原句：xxxxx        /  【原文】xxxxx
+     改为：xxxxx        /  【建议改为】xxxxx
+   认不出就整块交给 AI —— 但【绝不猜内容】。
+   ⚠ 「建议」单独两个字不能当 key（模型常说「建议你考虑…」，会误切）；
+     只认「建议改为 / 建议内容」这种明确的。 */
+var PD_K = [
+  ["old", /^[\s>*#\-·•]*[【\[]?\s*(原\s*句|原\s*文|旧\s*内\s*容|旧\s*文|old\s*text|old)\s*[】\]]?\s*[:：]?\s*/i],
+  ["neo", /^[\s>*#\-·•]*[【\[]?\s*(改\s*为|改\s*成|建\s*议\s*改\s*为|建\s*议\s*内\s*容|新\s*内\s*容|新\s*文|修\s*改\s*为|new\s*text|new)\s*[】\]]?\s*[:：]?\s*/i],
+  ["nm",  /^[\s>*#\-·•]*[【\[]?\s*(条\s*目\s*名|条\s*目|名\s*称|名\s*字|name|title)\s*[】\]]?\s*[:：]?\s*/i]
+];
+/* 条目行里顺手认出动作词：「条目：世界观（关闭）」 */
+function pdKindOf(s) {
+  var t = String(s || "");
+  if (/[（(\[]\s*(关\s*闭|停\s*用|禁\s*用|off|disable)\s*[）)\]]/i.test(t) || /^\s*(关\s*闭|停\s*用|禁\s*用)\s*$/i.test(t)) return "off";
+  if (/[（(\[]\s*(开\s*启|启\s*用|on|enable)\s*[）)\]]/i.test(t) || /^\s*(开\s*启|启\s*用)\s*$/i.test(t)) return "on";
+  if (/[（(\[]\s*(删\s*除|del|delete)\s*[）)\]]/i.test(t) || /^\s*(删\s*除)\s*$/i.test(t)) return "del";
+  if (/[（(\[]\s*(新\s*增|加\s*一\s*条|add)\s*[）)\]]/i.test(t) || /^\s*(新\s*增)\s*$/i.test(t)) return "add";
+  return "";
+}
+function pdParse(text) {
+  var lines = String(text || "").split(/\r?\n/), out = [], cur = null, sect = "";
+  function push() {
+    if (!cur) return;
+    if (cur.old || cur.neo || cur.k !== "edit") { out.push(cur); }
+    cur = null;
+  }
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i], hitK = "", m = null, k;
+    for (k = 0; k < PD_K.length; k++) { if ((m = ln.match(PD_K[k][1]))) { hitK = PD_K[k][0]; break; } }
+    if (hitK === "nm") {
+      push();
+      var raw = ln.replace(PD_K[2][1], "").trim();
+      var kk = pdKindOf(raw);
+      cur = { k: kk || "edit", nm: raw.replace(/[（(\[]\s*(关\s*闭|停\s*用|禁\s*用|开\s*启|启\s*用|删\s*除|新\s*增|off|on|del|add)\s*[）)\]]/ig, "").trim(),
+              old: "", neo: "", src: "fmt" };
+      sect = "nm";
+    } else if (hitK === "old") {
+      if (!cur) cur = { k: "edit", nm: "", old: "", neo: "", src: "fmt" };
+      cur.old = ln.replace(PD_K[0][1], "");
+      sect = "old";
+    } else if (hitK === "neo") {
+      if (!cur) cur = { k: "edit", nm: "", old: "", neo: "", src: "fmt" };
+      cur.neo = ln.replace(PD_K[1][1], "");
+      sect = "neo";
+    } else if (cur) {
+      /* 续行：原句 / 新内容常常换行写，接到当前这一段后面 */
+      if (sect === "old") cur.old += "\n" + ln;
+      else if (sect === "neo") cur.neo += "\n" + ln;
+    }
+  }
+  push();
+  for (var j = 0; j < out.length; j++) {
+    out[j].old = String(out[j].old || "").replace(/^\s+|\s+$/g, "");
+    out[j].neo = String(out[j].neo || "").replace(/^\s+|\s+$/g, "");
+  }
+  return out.filter(function (x) { return x.old || x.neo || x.k !== "edit"; });
+}
+
+/* ── 解析结果 → 待应用条目（pend）───────────────────────────────── */
+function pdBuild(blocks, src) {
+  var res = [], now = Date.now().toString(36);
+  for (var i = 0; i < blocks.length; i++) {
+    var b = blocks[i];
+    var cand = pdLocate(b.old || "", b.nm || "");
+    var top = cand[0] || null;
+    var hit = top && top.sc >= PDSEL ? top : null;
+    res.push({
+      id: "pd" + now + "_" + i,
+      k: b.k || "edit",
+      idf: hit ? hit.idf : "",
+      nm: b.nm || (hit ? hit.nm : ""),
+      old: b.old || (hit ? String((pdByIdf(hit.idf) || {}).content || "") : ""),
+      neo: b.neo || "",
+      nm2: b.newName || "",
+      why: b.why || "",
+      src: src || "fmt",
+      conf: hit ? hit.sc : 0,
+      cand: cand.slice(0, 6),
+      on: !!hit || b.k === "add"          /* 没定位上的默认不勾，逼他看一眼 */
+    });
+  }
+  return res;
+}
+
+/* ── 调模型 ────────────────────────────────────────────────────────
+   两条通道，串行试：
+     ① 酒馆自带后端 /api/backends/chat-completions/generate —— 同源，不跨域，
+        而且用的是他酒馆里已经配好的模型和 key（连填 key 都不用）
+     ② 直连 cfg.base —— 走这里才需要 key；有些服务商不允许浏览器直连，
+        被拦了会在 pdErr 里说清楚「多半是跨域」，不许含糊过去
+   ⚠ 这条链上没有流式：解析是一锤子买卖，流式只会让代码复杂、错误更难定位。 */
+function pdHeaders() {
+  var h = { "Content-Type": "application/json" };
+  try {
+    if (pwin && typeof pwin.getRequestHeaders === "function") {
+      var x = pwin.getRequestHeaders();
+      for (var k in x) if (Object.prototype.hasOwnProperty.call(x, k)) h[k] = x[k];
+    }
+  } catch (e) {}
+  return h;
+}
+function pdNormBase(b) {
+  b = String(b || "").replace(/\/+$/, "");
+  if (!/\/v\d+$/.test(b)) b += "/v1";
+  return b;
+}
+function pdPost(url, body, hdr, cb) {
+  var done = false;
+  function fin(ok, data, msg) {
+    if (done) return; done = true;
+    try { cb(ok, data, msg); } catch (e) { errSave(ownErr(e)); }
+  }
+  try {
+    var W = vpWin();
+    var p = W.fetch(url, { method: "POST", headers: hdr, body: JSON.stringify(body) });
+    if (!p || typeof p.then !== "function") { fin(false, null, "这个环境发不出请求"); return; }
+    p.then(function (r) {
+      return r.text().then(function (t) {
+        if (!r.ok) { fin(false, null, "HTTP " + r.status + " " + String(t || "").slice(0, 160)); return; }
+        var j = null;
+        try { j = JSON.parse(t); } catch (e) { fin(false, null, "返回的不是 JSON：" + String(t || "").slice(0, 120)); return; }
+        fin(true, j, "");
+      });
+    }, function (e) { fin(false, null, String(e && e.message || e)); });
+  } catch (e) { fin(false, null, String(e && e.message || e)); }
+}
+/* 从模型回复里抠 JSON（它经常裹 ```json 或者前面加一句废话） */
+function pdPickJSON(txt) {
+  var s = String(txt || "");
+  var i = s.indexOf("{"), j = s.lastIndexOf("}");
+  if (i >= 0 && j > i) {
+    try { return JSON.parse(s.slice(i, j + 1)); } catch (e) {}
+  }
+  i = s.indexOf("["); j = s.lastIndexOf("]");
+  if (i >= 0 && j > i) {
+    try { return { items: JSON.parse(s.slice(i, j + 1)) }; } catch (e) {}
+  }
+  return null;
+}
+function pdList() {
+  var out = [];
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (it.ph) continue;
+    out.push({ name: it.name, head: String(it.content || "").replace(/\s+/g, " ").slice(0, 90) });
+  }
+  return out;
+}
+var PD_SYS = "你是提示词预设的编辑器。用户会给你两样东西：一份【条目清单】（每条只有名字和前 90 个字），"
+  + "以及一段【模型的批评或建议】。请找出建议里真正要改的条目。\n"
+  + "只输出 JSON，不要任何解释、不要 markdown 代码块：\n"
+  + '{"items":[{"kind":"edit 或 toggle_on 或 toggle_off 或 del 或 add",'
+  + '"name":"目标条目名，必须原样来自清单；kind=add 时留空",'
+  + '"snippet":"建议里引用到的原文片段，用来核对定位；没引用就留空",'
+  + '"newName":"要改名时给新名字，不改留空",'
+  + '"newContent":"改完之后这一条的完整正文；toggle/del 时留空",'
+  + '"why":"一句话说明为什么这么改"}]}\n'
+  + "硬性要求：① 清单里找不到的条目，name 留空、snippet 填建议里引用的原句，不要编造条目名。"
+  + "② newContent 必须是能直接替换整条正文的完整文字，不许写「同上」「保持原样」「见上」这类占位。"
+  + "③ 建议本身互相矛盾时，全部列出来，交给用户自己选，不要替她做决定。"
+  + "④ 建议里纯属解释、没有具体改动的部分，不要输出任何条目。";
+function pdAsk(words, cb) {
+  var cfg = aiCfg;
+  var base = pdNormBase(cfg.base);
+  var msgs = [
+    { role: "system", content: PD_SYS },
+    { role: "user", content: "【条目清单】\n" + JSON.stringify(pdList())
+        + "\n\n【模型的批评 / 建议】\n" + String(words || "").slice(0, 12000) }
+  ];
+  var chain = [];
+  if (cfg.ch !== "direct") chain.push("tavern");
+  if (cfg.ch !== "tavern") chain.push("direct");
+  var idx = 0, lastErr = "";
+  function step() {
+    if (idx >= chain.length) { cb(false, null, lastErr || "连不上"); return; }
+    var way = chain[idx++];
+    if (way === "tavern") {
+      var src = /api\.openai\.com/i.test(base) ? "openai" : "custom";
+      var body = { chat_completion_source: src, model: cfg.model, messages: msgs,
+                   temperature: 0, max_tokens: 1800, stream: false };
+      if (src === "custom") body.custom_url = base;
+      if (cfg.key) body.proxy_password = cfg.key;
+      pdPost("/api/backends/chat-completions/generate", body, pdHeaders(), function (ok, j, msg) {
+        if (!ok) { lastErr = "酒馆后端：" + msg; step(); return; }
+        var txt = j && j.choices && j.choices[0] && (j.choices[0].message || {}).content;
+        if (!txt) { lastErr = "酒馆后端：返回里没有内容"; step(); return; }
+        cb(true, txt, "tavern");
+      });
+    } else {
+      if (!cfg.key) { lastErr = "没填 key，直连发不出去"; step(); return; }
+      var h = { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.key };
+      pdPost(base + "/chat/completions",
+        { model: cfg.model, messages: msgs, temperature: 0, stream: false }, h,
+        function (ok, j, msg) {
+          if (!ok) { lastErr = "直连：" + msg + "（多半是跨域被挡，换酒馆后端试试）"; step(); return; }
+          var txt = j && j.choices && j.choices[0] && (j.choices[0].message || {}).content;
+          if (!txt) { lastErr = "直连：返回里没有内容"; step(); return; }
+          cb(true, txt, "direct");
+        });
+    }
+  }
+  step();
+}
+
+/* ── 一键解析：先认格式块，认不出才问模型 ─────────────────────────
+   顺序不能反：格式块是免费的、确定的；AI 是花钱的、可能编的。
+   先调 AI 会把「模型已经照格式写好」的那份也重新猜一遍，纯属浪费且更容易错。 */
+function pdRun(cb) {
+  var words = String(pdTxt || "").trim();
+  if (!words) { cb(false, "先把你问模型的那段话粘进来"); return; }
+  var blocks = pdParse(words);
+  /* 至少要有「能定位的东西」才算解析成功；只有一个空壳也算失败 */
+  var good = blocks.filter(function (b) { return (b.old && b.old.length >= 4) || (b.nm && b.nm.length); });
+  if (good.length) {
+    pend = pend.concat(pdBuild(good, "fmt"));
+    pdSave();
+    cb(true, "从格式块里认出 " + good.length + " 处（没调 AI）");
+    return;
+  }
+  pdBusy = true; pdErr = "";
+  pdAsk(words, function (ok, txt, how) {
+    pdBusy = false;
+    if (!ok) { pdErr = String(txt || "解析失败"); cb(false, pdErr); return; }
+    var j = pdPickJSON(txt);
+    if (!j || !Array.isArray(j.items)) { pdErr = "模型没按 JSON 回，解析不了"; cb(false, pdErr); return; }
+    var bs = [];
+    for (var i = 0; i < j.items.length; i++) {
+      var x = j.items[i] || {};
+      var k = String(x.kind || "edit");
+      if (["edit", "toggle_on", "toggle_off", "del", "add"].indexOf(k) < 0) continue;
+      bs.push({
+        k: k === "toggle_on" ? "on" : k === "toggle_off" ? "off" : k,
+        nm: x.name || "", old: x.snippet || "", neo: x.newContent || "",
+        newName: x.newName || "", why: x.why || ""
+      });
+    }
+    if (!bs.length) { pdErr = "模型说这段里没有具体改动"; cb(false, pdErr); return; }
+    pend = pend.concat(pdBuild(bs, "ai"));
+    pdSave();
+    cb(true, "AI 解析出 " + bs.length + " 处（通道：" + (how === "tavern" ? "酒馆后端" : "直连") + "）");
+  });
+}
+
+/* ── 本地体检 ──────────────────────────────────────────────────────
+   这些都是「机器一眼就能看出来的毛病」，不该去问模型（白花钱还不准）：
+     · 开启了但一个字都没有（除了插入点）
+     · 两条正文归一后完全一样（重复塞两遍）
+     · 条目重名
+     · 顺序被打成两堆（enabled 全在上一半）—— 就是 v2.4 那个事故
+     · {{ 或 }} 没配对（酒馆会把整段宏当字面量吐出来）
+     · 某一条吃掉超过全场 35% 的 token
+   返回 [{k, t, ids:[identifier]}], t 是给人看的一句话。 */
+function pdCheck() {
+  var out = [], i, j;
+  var byC = {}, byN = {};
+  var sum = 0;
+  for (i = 0; i < items.length; i++) if (items[i].enabled) sum += tokOf(items[i].content);
+  function add(k, t, ids) { out.push({ k: k, t: t, ids: ids || [] }); }
+  for (i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!it.ph && it.enabled && !String(it.content || "").replace(/\s/g, "")) {
+      add("empty", "「" + it.name + "」是开启的，但正文一个字都没有", [it.identifier]);
+    }
+    var c = pdN(it.content);
+    if (c.length >= 30) {
+      if (byC[c] === undefined) byC[c] = it; else {
+        add("dup", "「" + it.name + "」和「" + byC[c].name + "」正文完全一样（重复了）",
+            [it.identifier, byC[c].identifier]);
+      }
+    }
+    var n = String(it.name || "").trim();
+    if (n) { if (byN[n] === undefined) byN[n] = it; else add("name", "有两个条目都叫「" + n + "」", [it.identifier, byN[n].identifier]); }
+    var raw = String(it.content || "");
+    var o1 = (raw.match(/\{\{/g) || []).length, o2 = (raw.match(/\}\}/g) || []).length;
+    if (o1 !== o2) add("macro", "「" + it.name + "」里的 {{ }} 没配对（" + o1 + " 个 {{ / " + o2 + " 个 }}）", [it.identifier]);
+    if (sum > 0 && it.enabled && tokOf(it.content) / sum > 0.35) {
+      add("fat", "「" + it.name + "」吃掉了全场 " + Math.round(tokOf(it.content) / sum * 100) + "% 的 token", [it.identifier]);
+    }
+  }
+  if (ordWarn) add("ord", "顺序被打成两堆了（开启的挤在上面、关闭的全在下面）—— 这就是会改坏预设的那个毛病", []);
+  return out;
+}
+
+/* ── 应用 / 撤销 ───────────────────────────────────────────────────
+   ★ 写之前一定先备份到 sk_pm_bakpd（只留最近一次），撤销就靠它。
+   ★ 只改 items / order / pgGroups，然后走 save() 那条既有的防抖落盘 ——
+     绝不自己另开一条写回路径（那会绕过 applyTo 的所有保护）。 */
+function pdBackup() {
+  var snap = { at: Date.now(), name: presetName, items: [], order: order.slice() };
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    snap.items.push({ id: it.id, name: it.name, role: it.role, content: it.content,
+      enabled: it.enabled, identifier: it.identifier, locked: it.locked, ph: it.ph, sys: it.sys });
+  }
+  lsSetJSON(PDK.bak, snap);
+}
+function pdApply() {
+  var sel = [], i;
+  for (i = 0; i < pend.length; i++) if (pend[i].on) sel.push(pend[i]);
+  if (!sel.length) { toast("一处都没勾"); return; }
+  pdBackup();
+  var done = 0, miss = 0, addN = 0;
+  for (i = 0; i < sel.length; i++) {
+    var p = sel[i], it = pdTarget(p);
+    if (p.k === "add") {
+      var idf = "skpm_" + Date.now().toString(36) + "_" + i;
+      var nit = { id: "it_new_" + idf, name: p.nm || (p.nm2 || "新条目"), role: "system",
+                  content: p.neo || "", enabled: true, identifier: idf, locked: false, isNew: true };
+      items.push(nit); order.push(idf); addN++; done++;
+      continue;
+    }
+    if (!it) { miss++; continue; }
+    if (p.k === "del") {
+      var k = items.indexOf(it);
+      if (k >= 0) items.splice(k, 1);
+      var ko = order.indexOf(it.identifier);
+      if (ko >= 0) order.splice(ko, 1);
+      done++;
+    } else if (p.k === "on" || p.k === "off") {
+      it.enabled = (p.k === "on"); done++;
+    } else {
+      if (p.neo) it.content = p.neo;
+      if (p.nm2) it.name = p.nm2;
+      done++;
+    }
+  }
+  pend = pend.filter(function (x) { return !x.on; });
+  pdSave();
+  renderList(); updStat(true);
+  if (sheetIsOn()) sheetRender();
+  save("已应用 " + done + " 处建议" + (addN ? "（含新增 " + addN + " 条）" : ""));
+  toast("应用了 " + done + " 处" + (miss ? "，" + miss + " 处找不到条目已跳过" : "") + "，可撤销");
+}
+/* 撤销是「把整份条目还原到上次应用之前」—— 会连他之后手动改的东西一起带走，
+   所以 UI 上必须先问一句。测试要直接驱动就调 pdUndo（不弹窗那个）。 */
+function pdUndoAsk() {
+  var snap = lsJSON(PDK.bak, null);
+  if (!snap || !Array.isArray(snap.items)) { toast("还没有可撤销的记录"); return; }
+  var msg = snap.name !== presetName
+    ? "这份备份来自「" + snap.name + "」，不是现在的「" + presetName
+      + "」。硬还原会把条目张冠李戴，确定要还原吗？"
+    : "会把条目正文 / 开关 / 顺序还原到「上次应用建议之前」那一版。"
+      + "之后你自己再改的内容也会一起没掉。";
+  dlgOpen("撤销上次导入？", msg, "撤销", function () { pdUndoGo(snap); });
+}
+function pdUndo() {
+  var snap = lsJSON(PDK.bak, null);
+  if (!snap || !Array.isArray(snap.items)) { toast("没有可撤销的记录"); return; }
+  if (snap.name !== presetName) {
+    dlgOpen("这份备份不是当前预设的", "备份来自「" + snap.name + "」，现在是「" + presetName
+      + "」。硬还原会把条目张冠李戴。确定要还原吗？", "就要还原", function () { pdUndoGo(snap); });
+    return;
+  }
+  pdUndoGo(snap);
+}
+function pdUndoGo(snap) {
+  items = snap.items.slice();
+  order = snap.order.slice();
+  for (var i = 0; i < items.length; i++) items[i].id = "it" + i;
+  renderList(); updStat(true);
+  if (sheetIsOn()) sheetRender();
+  save("已撤销上次导入");
+  toast("已还原到导入前");
 }
 
 /* =====================================================================
@@ -1740,8 +2259,39 @@ function mount() {
       build: exBuild
     },
     /* 正文框定高（v2.5：全实测）—— 测试直接驱动，不用真弹键盘 */
-    ta: { room: taRoom, fit: fitTa, watch: kbWatch },
+    ta: { room: taRoom, fit: fitTa, watch: kbWatch,
+      /* 读 / 写那把锁：0 = 还没量过（下次 fit 会重新量），>0 = 已锁死的高度 */
+      lock: function (v) { if (v === undefined) return taLock; taLock = v || 0; return taLock; } },
+    /* 导入建议 / 体检（v3.0）：全是纯函数或只碰内存，测试直接驱动，不用点 UI */
+    pd: {
+      parse: pdParse, locate: pdLocate, build: pdBuild, check: pdCheck,
+      apply: pdApply, undo: pdUndo, undoGo: pdUndoGo, bar: pdBarHTML,
+      run: pdRun, ask: pdAsk, pick: pdPickJSON, kind: pdKindOf, list: pdList,
+      get: pdGet, target: pdTarget, save: pdSave, cfgSave: pdCfgSave,
+      load: pdCfgLoad, count: pdCount, sel: function () { return PDSEL; },
+      /* 渲染出来给预览脚本截图用（不是给真机用的） */
+      html: sheetAI, tab: function (t) { pdTab = t || "cmp"; },
+      note: function (a, b) { pdErr = a || ""; pdNote = b || ""; },
+      /* 测试要能直接改 items / 看 order（体检和应用都绕着它们转） */
+      items: function () { return items; }, order: function () { return order; },
+      aiCfg: function () { return aiCfg; },
+      pend: function () { return pend; },
+      setPend: function (a) { pend = Array.isArray(a) ? a : []; },
+      setTxt: function (s) { pdTxt = String(s || ""); },
+      open: aiOpen, go: aiGo
+    },
     probe: probeDump,
+    /* 预设页的两块纯 HTML（预览 / 断言用，不碰状态） */
+    pre: {
+      set: function (o) {
+        o = o || {};
+        if (o.grp !== undefined) pGrpMode = !!o.grp;
+        if (o.sort !== undefined) pSort = !!o.sort;
+        if (o.groups) pgGroups = o.groups;
+      },
+      pgbar: function () { return pgBarHTML(); },
+      tool: function () { return presetToolRow(); }
+    },
     /* 搜索匹配的纯函数：跨行 / 标点全半角这些坑全靠它，暴露出来好单独验 */
     find: { ranges: findRanges, tight: tightMap },
     diag: diagOpen,                                              /* 排查用：直接弹自检卡 */
@@ -2040,6 +2590,95 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
 /* 搜索没结果：把关键词也说出来，省得怀疑是不是没输进去 */
 .nohit{padding:26px 16px;text-align:center;color:var(--ink3);font-size:12px;line-height:1.9}
 .nohit b{color:var(--ink2);font-weight:600}
+/* ── 导入建议页（v3.0）────────────────────────────────────────────
+   配色口径：主按钮一律【墨色实心】、危险操作砖红 #9c4a35。
+   ⚠ 这里不要用 --goldgrad 做大面积块 —— 他 2026-11-13 明确说过金色做大块最廉价；
+     界面里早就有的那几处不动，但新加的一律不用。 */
+.aiw{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.aitabs{display:flex;gap:6px;padding:8px 12px 6px;flex:none}
+.aitabs button{flex:1 1 0;min-width:0;border:1px solid var(--line);background:var(--paper);
+  color:var(--ink2);border-radius:8px;padding:6px 2px;font-size:11.5px;line-height:1.4;font-family:inherit;
+  cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aitabs button.on{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:600}
+.aip{padding:4px 12px 12px;display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0}
+.aip textarea{flex:1 1 auto;min-height:110px;resize:none;border:1px solid var(--line);border-radius:10px;
+  background:var(--paper);color:var(--ink);padding:10px;font:12.5px/1.7 inherit;box-sizing:border-box;outline:none}
+.aip textarea:focus{border-color:var(--ink3)}
+.aihint{font-size:11px;line-height:1.7;color:var(--ink3);flex:none}
+.aierr{font-size:11.5px;line-height:1.6;color:#9c4a35;background:rgba(156,74,53,.08);
+  border-radius:8px;padding:7px 9px;flex:none;word-break:break-all}
+.ainote{font-size:11.5px;line-height:1.6;color:#2f6b52;background:rgba(47,107,82,.08);
+  border-radius:8px;padding:7px 9px;flex:none;word-break:break-all}
+.aigo{flex:none;border:0;border-radius:10px;background:var(--ink);color:var(--paper);
+  padding:11px 0;font-size:13px;line-height:1.4;font-family:inherit;font-weight:600;cursor:pointer;letter-spacing:.3px}
+.aigo:disabled{opacity:.45}
+.aigo.sm{padding:8px 0;flex:1 1 0;font-size:12px}
+.aigo.ghost{background:var(--paper);color:var(--ink2);border:1px solid var(--line)}
+.aibts{display:flex;gap:6px;flex:none}
+.aifd{display:flex;align-items:center;gap:8px;flex:none}
+.aifd i{flex:none;width:56px;font-style:normal;font-size:11.5px;color:var(--ink3)}
+.aifd input,.aifd select{flex:1 1 auto;min-width:0;border:1px solid var(--line);border-radius:8px;
+  background:var(--paper);color:var(--ink);padding:6px 8px;font:12px/1.5 inherit;box-sizing:border-box;outline:none}
+.ailist{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:4px 10px 8px;display:flex;flex-direction:column;gap:9px}
+.ainil{padding:26px 16px;text-align:center;color:var(--ink3);font-size:12px;line-height:1.9}
+.aic{border:1px solid var(--line);border-radius:11px;background:var(--paper);
+  box-shadow:var(--shsm);padding:9px 10px;display:flex;flex-direction:column;gap:6px}
+.aic.miss{border-left:3px solid #9c4a35}
+.aic.on{border-color:var(--ink3)}
+.aih{display:flex;align-items:center;gap:6px}
+.aick{flex:none;width:19px;height:19px;border-radius:6px;border:1px solid var(--line2);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--paper);color:#fff}
+.aick.on{background:var(--ink);border-color:var(--ink)}
+.aick svg{width:11px;height:11px;display:block}
+.ainm{flex:0 1 auto;min-width:0;font-size:12.5px;font-weight:600;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aikd{flex:none;font-style:normal;font-size:10px;color:var(--ink3);border:1px solid var(--line);
+  border-radius:5px;padding:0 4px;line-height:1.6}
+.aiconf{flex:none;margin-left:auto;font-style:normal;font-size:10px;padding:0 5px;
+  border-radius:5px;line-height:1.7;white-space:nowrap}
+.aiconf.c3{color:#2f6b52;background:rgba(47,107,82,.12)}
+.aiconf.c2{color:#8a6420;background:rgba(138,100,32,.12)}
+.aiconf.c1{color:#9c4a35;background:rgba(156,74,53,.1)}
+.aiconf.c0{color:#fff;background:#9c4a35}
+.airow{display:flex;align-items:center;gap:6px}
+.airow i{font-style:normal;font-size:10.5px;color:var(--ink3);letter-spacing:.4px}
+.aicnt{margin-left:auto;font-size:10px;color:var(--ink3);font-family:var(--mono)}
+.aiold{max-height:110px;overflow-y:auto;font-size:11.5px;line-height:1.65;color:var(--ink2);
+  background:var(--paper3);border-radius:7px;padding:7px 9px;white-space:pre-wrap;word-break:break-word}
+.aiold.nil{color:var(--ink3);font-style:italic}
+.aineo{width:100%;box-sizing:border-box;min-height:76px;max-height:220px;resize:vertical;
+  border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);
+  padding:7px 9px;font:11.5px/1.65 inherit;outline:none}
+.aineo:focus{border-color:var(--ink3)}
+.ainm2{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;
+  background:var(--paper);color:var(--ink);padding:6px 9px;font:12px/1.5 inherit;outline:none}
+.aitip{font-size:11.5px;line-height:1.6;color:var(--ink2)}
+.aitip.dg{color:#9c4a35}
+.aiwhy{font-size:10.5px;line-height:1.6;color:var(--ink3);border-left:2px solid var(--line2);padding-left:7px}
+.aiwhy::before{content:"为什么 · ";color:var(--ink3);opacity:.75}
+/* 对照页顶上那句：勾上才会写进预设 —— 他第一次用最需要看见的就是这句 */
+.ailead{flex:none;padding:0 12px 6px;font-size:10.5px;line-height:1.6;color:var(--ink3)}
+.aift2{display:flex;align-items:center;gap:6px}
+.aisel{flex:1 1 auto;min-width:0;border:1px solid var(--line);border-radius:7px;background:var(--paper);
+  color:var(--ink2);padding:4px 6px;font:11px/1.5 inherit;outline:none}
+.aidrop{flex:none;font-size:10.5px;color:var(--ink3);border:1px solid var(--line);
+  border-radius:6px;padding:3px 7px;cursor:pointer}
+.aidrop:active{background:var(--paper3)}
+.aibar{flex:none;display:flex;align-items:center;gap:8px;padding:8px 12px;
+  border-top:1px solid var(--line2);background:var(--paper2)}
+.ailk{flex:none;font-size:11px;color:var(--ink2);border:1px solid var(--line);
+  border-radius:7px;padding:5px 9px;cursor:pointer;white-space:nowrap}
+.ailk:active{background:var(--paper3)}
+.aiapply{flex:none;border:0;border-radius:9px;background:var(--ink);color:var(--paper);
+  padding:9px 14px;font-size:12.5px;line-height:1.3;font-family:inherit;font-weight:600;cursor:pointer}
+.aiapply:disabled{opacity:.4}
+/* 列表顶上那条「有 N 处待应用」—— 不抢眼但一定看得见 */
+.pdbanner{display:flex;align-items:center;gap:8px;padding:7px 12px;flex:none;
+  background:rgba(47,107,82,.1);border-bottom:1px solid var(--line2);font-size:11.5px;color:#2f6b52}
+.pdbanner b{font-family:var(--mono);font-size:12.5px}
+.pdbanner .go{margin-left:auto;flex:none;border-radius:7px;background:#2f6b52;color:#fff;
+  padding:4px 9px;font-size:11px;cursor:pointer}
 /* 方案条 */
 /* 方案条（已废弃方案功能，留此行防漏改） */
 .chip{
@@ -2090,6 +2729,7 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
   border-radius:5px;padding:0 3px;margin-left:4px;vertical-align:1px;background:var(--goldsoft)}
 @keyframes rowIn{from{opacity:0;transform:translateY(4px)}}
 .row.in{animation:rowIn .26s ease backwards}
+.noanim .row.in{animation:none}
 @keyframes flashRow{0%{background:var(--goldsoft)}100%{background:transparent}}
 .row.flash{animation:flashRow 1s ease}
 .macros{display:flex;align-items:center;gap:6px;margin-top:9px;flex-wrap:wrap}
@@ -2486,6 +3126,22 @@ mark{background:linear-gradient(180deg,transparent 58%,rgba(223,200,148,.62) 58%
 .ordbar .chip{flex:none;cursor:pointer;font-size:11px;padding:3px 9px;border-radius:8px;
   border:1px solid rgba(186,117,23,.45);color:var(--goldD);background:rgba(255,255,255,.55)}
 .ordbar .x{flex:none;cursor:pointer}
+/* 分组模式顶栏（2026-11-19）：中性的墨色，不用金、也不用警告红 ——
+   它只是「你现在在分组模式里」，不是错误。退出按钮必须一眼看见。 */
+.pgbar{border-color:var(--line);background:var(--paper2);color:var(--ink);cursor:default}
+.pgbar .chip{flex:none;cursor:pointer;font-size:11px;padding:3px 9px;border-radius:8px;
+  border:1px solid var(--line);color:var(--ink);background:var(--paper)}
+.pgbar .x{flex:none;cursor:pointer;font-weight:600;color:var(--ink)}
+/* 管理分组弹框 */
+.pglist{display:flex;flex-direction:column;gap:7px}
+.pgrow{display:flex;align-items:center;gap:6px}
+.pgmn{flex:1;min-width:0;height:30px;border:1px solid var(--line);border-radius:8px;
+  background:var(--paper);color:var(--ink);font-size:12.5px;padding:0 8px}
+.pgall{margin-top:10px;display:flex;align-items:center;gap:8px}
+.pgnote{font-size:10.5px;color:var(--ink3);font-style:normal;line-height:1.5}
+/* 「解散 / 全拆」用砖红 —— 他 11-13 定的：金色做大色块廉价，危险动作用砖红小面积。
+   改名是普通操作，走中性墨色（别用 .go2 那套金色）。 */
+.chip.pdanger{color:#9c4a35;border-color:rgba(156,74,53,.38);background:rgba(156,74,53,.06)}
 /* toast 1300 */
 /* toast 1300 —— 位置同样由 JS 实测写死（toastFit），理由同弹窗：
    bottom:calc(72px+…) 量的是 iframe / 地址栏收起时的视口，小窗口下会飘。 */
@@ -2731,7 +3387,9 @@ var SV = {
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   find: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg>',
   /* 切换预设：两个来回的箭头 */
-  swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg>'
+  swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg>',
+  /* 导入建议（v3.0）：一颗四角星 + 一颗小星 —— 不用 emoji（他明确要求图标走 SVG） */
+  spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.2 3.8l1.7 4.1 4.1 1.7-4.1 1.7-1.7 4.1-1.7-4.1L4.4 9.6l4.1-1.7z"/><path d="M17.6 14.2l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>'
 };
 function ico(id, title, cls) {
   return '<span class="ico' + (cls ? " " + cls : "") + '" id="' + id + '" title="' + (title || "") + '">' + (SV[id] || "") + "</span>";
@@ -2759,6 +3417,7 @@ function HTML() {
       '<span class="nm" id="pname"></span>'
       +       '<button class="psw" id="pSwap" title="切换酒馆预设">' + SV.swap + '</button>'
       + '<span class="grow"></span>' +
+      '<span class="ico" id="pAi" title="导入建议 / 体检">' + SV.spark + '</span>' +
       '<span class="ico" id="pFind" title="搜索：条目名 / 内容">' + SV.find + '</span>' +
       '<span class="ico" id="pNight" title="夜间 / 日间">' + SV.night + '</span>' +
       '<span class="ico" id="pClose" title="收起">' + SV.close + '</span>' +
@@ -3083,6 +3742,9 @@ function renderNav() {
     sw.style.display = isP ? "" : "none";
     sw.title = "切换酒馆预设（当前：" + presetName + "）";
   }
+  /* 导入建议的入口也只在预设页出现：别的页签上它没意义，还白占 22px 顶栏 */
+  var pai = QI("pAi");
+  if (pai) pai.style.display = isP ? "" : "none";
   QI("how").textContent = isP ? "" : (plain ? "" : ((view === "world" ? wbHow : rxHow) || ""));
 }
 
@@ -3115,7 +3777,11 @@ function presetRowHTML(it, m, seq) {
     +     phTag + "</span>"
     +   (pGrpMode && grpName ? '<span class="gtag">' + esc(grpName) + "</span>" : "")
     +   '<span class="cc">' + fmt(L) + "</span>"
-    +   (pSort && it.identifier
+    /* ★★ 2026-11-19 主人真机翻车：搜索着拖了一下，整个预设的顺序全变了。
+       根因：dragEnd 是拿「屏幕上看得见的行」拼新顺序的，搜索/筛选后只有命中行在
+       DOM 里 → 那几条被提到最前、其余按原相对位置后缀 → 看起来「全都变了」。
+       所以：只有【全量列表】才给拖拽把手，其余情况一律不给（看不见就不会误拖）。 */
+    +   (pSort && it.identifier && !findQ && tab === "all"
         ? '<span class="grip" data-grip="' + escAttr(it.identifier) + '" title="按住上下拖动">' + SV.grip + "</span>"
         : "")
     +   (it.ph ? "" : '<span class="op" data-edbtn="' + it.id + '" title="编辑">' + SV.edit + "</span>")
@@ -3279,18 +3945,29 @@ function presetToolRow() {
     + '<span class="chip add" data-padd="1" title="在最底下加一条新条目">' + SV.plus + '新增条目</span>'
     + '<span class="chip' + (pSort ? " cur" : "") + '" data-psort="1" title="按住 ☰ 上下拖动调顺序">' + SV.updown + '排序</span>'
     + '<span class="chip' + (pGrpMode ? " cur" : "") + '" data-pgrp="1" title="点条目左边的框选中，再确认收录进分组">' + SV.grid + '分组</span>';
+  /* 有分组才出现「管理分组」：改名 / 解散一个 / 全部拆掉（2026-11-19 他要的） */
+  if (pgGroups.length) {
+    h += '<span class="chip" data-pgmgr="1" title="改名 / 解散 / 全部拆掉">管理分组</span>';
+  }
   if (pGrpMode) {
     var n = pgSelCount();
     h += '<span class="cnt" id="pgcnt">' + (n ? "已选 " + n + " 条" : "点框选中") + "</span>"
-      +  '<span class="chip go2" data-pgok="1">确认收录</span>'
-      +  '<span class="chip" data-pdone="1">取消</span>';
+      +  '<span class="chip go2" data-pgok="1">收录进分组</span>'
+      +  '<span class="chip" data-pgout="1">移出分组</span>'
+      +  '<span class="chip" data-pdone="1">退出分组</span>';
   } else if (pSort) {
+    /* ★ 搜索 / 筛选态不给拖（2026-11-19 真机：搜索时顺手动了一下，整份顺序被改坏） */
+    if (findQ || tab !== "all") {
+      h += '<span class="cnt">先清掉搜索、切回「全部」，才能拖顺序</span>';
+    }
     h += '<span class="chip go2" data-pdone="1">完成</span>';
   }
   return h + "</div>";
 }
 function listPreset() {
   var el = QI("list"); if (!el) return;
+  el.className = "list" + (skipRowAnim ? " noanim" : "");   /* ⚠ 必须带上 "list"，那是它的基础类 */
+  skipRowAnim = false;
   var m = maxLen(), h = "", shown = 0, hit = 0;
   function pass(it) {
     if (tab === "on" && !it.enabled) return false;
@@ -3470,6 +4147,11 @@ function taRoom() {
   }
   return Math.round(shh - fixed);
 }
+/* ★★ v3.1（2026-11-19 主人定）：「输入框高度要固定，不随键盘变」——
+   进去那一刻量一次，就锁死这一个值；之后键盘弹不弹、可视区怎么变，都不再重算。
+   以前每弹一次键盘就重算一次，框跟着长/缩，他嫌抖。
+   ⚠ 锁的是【进去时（键盘还没弹）】量到的那个值；量不出来（还没渲染好）就不锁、下一拍再试。 */
+var taLock = 0;
 function fitTa() {
   var s = sheetEl();
   if (!s || !s.classList.contains("on")) return;
@@ -3486,10 +4168,15 @@ function fitTa() {
        并且扣掉了边框），不是 vh、不是「键盘比例估算」—— 那两种在键盘弹起时都会算错。
      ⚠ 量不出来（还没渲染好）就一个字都不写：直接 return，别清掉上一次的正确值，
        也别写个 0 —— 一写 0 就等于框没了。 */
-  var h = taRoom();
-  if (!h || h < 120) return;                          /* 没渲染好 / 实在太矮 → 保持现状 */
-  if (Math.abs((wrap.offsetHeight || 0) - h) <= 2) return;   /* 没变就别动，省一次重排 */
-  wrap.style.height = h + "px";
+  /* ★ v3.1：锁死高度。第一次量得出来就记下来，之后键盘弹不弹都不再改。
+     量不出来（还没渲染好）就一个字都不写，等下一拍 —— 别写 0，也别写个半成品。 */
+  if (!taLock) {
+    var room = taRoom();
+    if (!room || room < 120) return;
+    taLock = room;
+  }
+  if (Math.abs((wrap.offsetHeight || 0) - taLock) <= 2) return;   /* 没变就别动，省一次重排 */
+  wrap.style.height = taLock + "px";
 }
 /* 键盘弹起 / 收起、转屏都会让可视高变 —— 记下真值并重算一次。
    ★ 只在编辑页生效（fitTa 自己会挡别的页）；60ms 防抖，别跟着键盘动画狂算。 */
@@ -3514,7 +4201,8 @@ function sheetRender() {
   s.innerHTML = (edWhich === "w" ? sheetWorld()
     : (edWhich === "r" ? sheetRegex()
     : (edWhich === "f" ? sheetFavSel()
-    : (edWhich === "fr" ? sheetFavRead() : sheetPreset()))));
+    : (edWhich === "ai" ? sheetAI()
+    : (edWhich === "fr" ? sheetFavRead() : sheetPreset())))));
   fitTa();                    /* 查找条一摊开/收起，固定块高度就变了，正文框跟着重算 */
 }
 function sheetShow(kind) {
@@ -3529,6 +4217,7 @@ function sheetShow(kind) {
        但词本身留着：点一下「查找」还能接着用。 */
     if (findQ) { fBar.q = findQ; fBar.on = true; } else { fBar.on = false; }
   }
+  taLock = 0;                      /* v3.1：这一次进去要重新量一次，量完就锁死 */
   sheetRender(); s.classList.add("on"); sheetFit(); fitTa();
   try { pdoc.body.style.overflow = "hidden"; } catch (e) {}   /* 底下那层别跟着一起滑 */
   /* 键盘是异步抬起来的：刚 focus 时拿到的常常还是抬起之前的尺寸，多补几枪 */
@@ -3542,13 +4231,15 @@ function sheetShow(kind) {
     return;
   }
   /* 收藏的勾选页是只读列表，没有输入框，别去 focus 一个不存在的框；
-     收藏的阅读页同理（抢焦点＝手机键盘弹起来把正文盖住一半） */
-  if (kind === "f" || kind === "fr") return;
+     收藏的阅读页同理（抢焦点＝手机键盘弹起来把正文盖住一半）；
+     导入建议页也一样 —— 它一进来就该先看见对照，不是先弹键盘。 */
+  if (kind === "f" || kind === "fr" || kind === "ai") return;
   focusEditor('[data-edbox="' + edBoxId() + '"]', kind === "r" ? "input" : "textarea");
 }
 function sheetClose() {
   var s = sheetEl();
   edWhich = "";
+  taLock = 0;                      /* 关了就把锁清掉，下次进去重新量 */
   if (s) { s.classList.remove("on"); s.innerHTML = ""; }
   try { pdoc.body.style.overflow = ""; } catch (e) {}
 }
@@ -3826,6 +4517,186 @@ function sheetPreset() {
     +   "</div>"
     + "</div></div>";
 }
+/* =====================================================================
+   导入建议 · 全屏页（v3.0）
+   ── 三态 ──────────────────────────────────────────────────────────
+     in  ＝粘贴（默认，还没东西可对照时）
+     cmp ＝对照（旧 / 新上下排，逐条打勾）
+     cfg ＝解析引擎设置（不占一个页签，从「粘贴」页里点进去）
+   ── 为什么是全屏页而不是弹窗 ──────────────────────────────────────
+     他要「逐条确认 + 可以编辑」。手机上半屏弹窗里塞一个旧文框 + 一个新文框，
+     一条就要占两屏高，根本翻不动。全屏页沿用 #sheet（高度跟着 visualViewport），
+     键盘弹起来也不会把要看的正文盖掉 —— 这是 v1.7 起就定死的规矩。
+   ── 已定位 / 没定位 ─────────────────────────────────────────────
+     没定位的卡片左边打一条竖线、勾选框默认空着，逼他看一眼再勾。
+     绝不替他把「看起来像」的条目默默勾上 —— 改错一条比没改更糟。
+   ===================================================================== */
+function pdGet(id) {
+  for (var i = 0; i < pend.length; i++) if (pend[i].id === id) return pend[i];
+  return null;
+}
+function aiSelOpts(p) {
+  var h = '<option value="">（不指定）</option>', seen = {}, i, it;
+  for (i = 0; i < p.cand.length; i++) {
+    var c = p.cand[i];
+    if (!c.idf || seen[c.idf]) continue;
+    seen[c.idf] = 1;
+    h += '<option value="' + escAttr(c.idf) + '"' + (c.idf === p.idf ? " selected" : "") + ">"
+      + esc(c.nm) + " · 匹配 " + Math.round(c.sc * 100) + "%</option>";
+  }
+  for (i = 0; i < items.length; i++) {
+    it = items[i];
+    if (!it.identifier || it.ph || seen[it.identifier]) continue;
+    h += '<option value="' + escAttr(it.identifier) + '"' + (it.identifier === p.idf ? " selected" : "") + ">"
+      + esc(it.name) + "</option>";
+  }
+  return h;
+}
+/* 新正文框的初始高度：按字数折行估个大概，省得他每次都要把框往下拖。
+   11.5px 的字、卡片内宽 ≈ 300px → 一行约 26 字；行高 19。
+   封顶 240（再高就把「现在」那块挤出屏幕了，反而看不见对比）。 */
+function pdTaH(s) {
+  var lines = 0, arr = String(s == null ? "" : s).split("\n");
+  for (var i = 0; i < arr.length; i++) lines += Math.max(1, Math.ceil(arr[i].length / 26));
+  return Math.min(240, Math.max(92, lines * 19 + 20));
+}
+function aiCardHTML(p) {
+  var it = pdTarget(p);
+  var cur = it ? String(it.content || "") : "";
+  var kTx = p.k === "add" ? "新增" : p.k === "del" ? "删除" : p.k === "off" ? "关掉" : p.k === "on" ? "打开" : "改正文";
+  var confCls = !it ? "c0" : p.conf >= 0.9 ? "c3" : p.conf >= 0.6 ? "c2" : "c1";
+  var confTx = !it ? "没定位到" : p.conf >= 0.9 ? "对得上" : p.conf >= 0.6 ? "大概是" : "不太确定";
+  var h = '<div class="aic' + (p.on ? " on" : "") + (it || p.k === "add" ? "" : " miss") + '" data-pd="' + escAttr(p.id) + '">'
+    + '<div class="aih">'
+    +   '<span class="aick' + (p.on ? " on" : "") + '" data-pdtog="' + escAttr(p.id) + '">' + (p.on ? SV.check : "") + "</span>"
+    +   '<b class="ainm">' + esc(it ? it.name : (p.nm || "还没指定条目")) + "</b>"
+    +   '<i class="aikd">' + kTx + "</i>"
+    +   '<i class="aiconf ' + confCls + '">' + confTx + "</i>"
+    + "</div>";
+  if (p.k === "on" || p.k === "off") {
+    h += '<div class="aitip">这一条' + (p.k === "off" ? "关掉" : "打开") + "，正文一个字都不动</div>";
+  } else if (p.k === "del") {
+    h += '<div class="aitip dg">整条删掉，正文 ' + fmt(tokOf(cur)) + " tok</div>"
+      + '<div class="aiold">' + (cur ? esc(cur.slice(0, 400)) : "（这条是空的）") + "</div>";
+  } else {
+    if (p.k === "add") {
+      h += '<div class="airow"><i>新名字</i></div>'
+        + '<input class="ainm2" data-pdnm2="' + escAttr(p.id) + '" value="' + escAttr(p.nm2 || p.nm || "") + '" placeholder="给它起个名字">'
+        + '<div class="airow"><i>正文</i></div>';
+    } else {
+      h += '<div class="airow"><i>现在</i><span class="aicnt">' + fmt(tokOf(cur)) + " tok</span></div>"
+        + '<div class="aiold">' + (cur ? esc(cur) : "（这条现在是空的）") + "</div>"
+        + '<div class="airow"><i>改成</i><span class="aicnt">' + fmt(tokOf(p.neo)) + " tok</span></div>";
+    }
+    h += '<textarea class="aineo" data-pdneo="' + escAttr(p.id) + '" spellcheck="false"'
+      + ' style="height:' + pdTaH(p.neo) + 'px" placeholder="改完之后这一条是什么">' + esc(p.neo) + "</textarea>";
+  }
+  if (p.why) h += '<div class="aiwhy">' + esc(p.why) + "</div>";
+  h += '<div class="aift2">'
+    + '<select class="aisel" data-pdsel="' + escAttr(p.id) + '">' + aiSelOpts(p) + "</select>"
+    + '<span class="aidrop" data-pddrop="' + escAttr(p.id) + '">移掉</span>'
+    + "</div></div>";
+  return h;
+}
+function sheetAI() {
+  var n = pdCount(), tot = pend.length, i;
+  var h = '<div class="aiw" data-ai="1">' + sheetHead("导入建议");
+  h += '<div class="aitabs">'
+    + '<button data-aitab="in"' + (pdTab === "in" ? ' class="on"' : "") + ">粘贴原文</button>"
+    + '<button data-aitab="cmp"' + (pdTab === "cmp" ? ' class="on"' : "") + ">逐条对照" + (tot ? " " + n + "/" + tot : "") + "</button>"
+    + '<button data-aitab="cfg"' + (pdTab === "cfg" ? ' class="on"' : "") + ">引擎</button>"
+    + "</div>";
+  if (pdTab === "in") {
+    h += '<div class="aip">'
+      + '<div class="aihint">把你在正文里问模型、它给你的那段建议原样粘进来。'
+      +   '它要是正好按「条目 / 原句 / 改为」说的，这里直接就能认出来，不用花 AI 的钱。</div>'
+      + '<textarea id="aitxt" spellcheck="false" placeholder="粘这里…">' + esc(pdTxt) + "</textarea>"
+      + (pdErr ? '<div class="aierr">' + esc(pdErr) + "</div>" : "")
+      + (pdNote ? '<div class="ainote">' + esc(pdNote) + "</div>" : "")
+      + '<button class="aigo" data-aigo="1"' + (pdBusy ? " disabled" : "") + ">"
+      +   (pdBusy ? "正在解析…" : "解析成待确认的改动") + "</button>"
+      + "</div>";
+  } else if (pdTab === "cfg") {
+    h += '<div class="aip">'
+      + '<div class="aihint">只在「模型没按格式回」的时候才会用到这个。'
+      +   "默认先走酒馆自带的后端（同源、不跨域、用你酒馆里配好的模型），连不上才退回直连。</div>"
+      + '<label class="aifd"><i>走哪条路</i><select id="aicCh">'
+      +   '<option value="auto"' + (aiCfg.ch === "auto" ? " selected" : "") + ">自动（酒馆优先）</option>"
+      +   '<option value="tavern"' + (aiCfg.ch === "tavern" ? " selected" : "") + ">只用酒馆后端</option>"
+      +   '<option value="direct"' + (aiCfg.ch === "direct" ? " selected" : "") + ">只直连</option>"
+      + "</select></label>"
+      + '<label class="aifd"><i>接口地址</i><input id="aicBase" value="' + escAttr(aiCfg.base) + '" placeholder="https://api.openai.com/v1"></label>'
+      + '<label class="aifd"><i>模型名</i><input id="aicModel" value="' + escAttr(aiCfg.model) + '" placeholder="gpt-4o-mini"></label>'
+      + '<label class="aifd"><i>Key</i><input id="aicKey" type="password" value="' + escAttr(aiCfg.key) + '" placeholder="直连才需要，留空也行"></label>'
+      + '<div class="aihint">Key 存在这台手机本地（sk_pm_ai），不上传、不进预设。嫌不安全就点下面清掉。</div>'
+      + '<div class="aibts"><button class="aigo sm" data-aicfgsave="1">保存</button>'
+      +   '<button class="aigo sm ghost" data-aikeyclr="1">清掉 key</button>'
+      +   '<button class="aigo sm ghost" data-aitest="1">测一下通不通</button></div>'
+      + (pdNote ? '<div class="ainote">' + esc(pdNote) + "</div>" : "")
+      + "</div>";
+  } else {
+    h += '<div class="ailead">勾上的才会写进预设。应用前会自动备份，改错了点「撤销上次」就能还原。</div>';
+    h += '<div class="ailist">';
+    if (!tot) h += '<div class="ainil">还没有待确认的改动。<br>先去「粘贴原文」那一页。</div>';
+    for (i = 0; i < tot; i++) h += aiCardHTML(pend[i]);
+    h += "</div>"
+      + '<div class="aibar">'
+      +   '<span class="ailk" data-aiall="1">全选</span>'
+      +   '<span class="ailk" data-ainone="1">全不选</span>'
+      +   '<span class="grow"></span>'
+      +   '<span class="ailk" data-aiundo="1">撤销上次</span>'
+      +   '<button class="aiapply" data-aiapply="1"' + (n ? "" : " disabled") + ">应用 " + n + " 处</button>"
+      + "</div>";
+  }
+  h += "</div>";
+  return h;
+}
+
+/* ── 页面动作 ──────────────────────────────────────────────────── */
+function aiOpen() {
+  /* 有没处理完的改动就直接进对照页 —— 那才是他回来要看的 */
+  pdTab = pend.length ? "cmp" : "in";
+  pdErr = ""; pdNote = "";
+  sheetShow("ai");
+}
+function aiCfgGrab() {
+  var ch = QI("aicCh"), b = QI("aicBase"), m = QI("aicModel"), k = QI("aicKey");
+  if (ch) aiCfg.ch = ch.value;
+  if (b && b.value.trim()) aiCfg.base = b.value.trim();
+  if (m && m.value.trim()) aiCfg.model = m.value.trim();
+  if (k) aiCfg.key = k.value;
+  pdCfgSave();
+}
+function aiGo() {
+  if (pdBusy) return;
+  /* 先把框里的字收进 pdTxt —— 重渲染会把 textarea 重建，不收就白打了 */
+  var ta = QI("aitxt");
+  if (ta) { pdTxt = ta.value; lsSet(PDK.txt, pdTxt); }
+  pdErr = ""; pdNote = "";
+  if (!String(pdTxt).trim()) { pdErr = "先把你在正文里问模型的那段话粘进来"; sheetRender(); return; }
+  pdBusy = true; sheetRender();          /* 先画一帧「正在解析…」，不然点下去像没反应 */
+  setTimeout(function () {
+    pdRun(function (ok, msg) {
+      pdBusy = false;
+      if (!ok) { pdErr = String(msg || "解析失败"); sheetRender(); return; }
+      pdNote = String(msg || ""); pdTab = "cmp"; sheetRender();
+    });
+  }, 40);
+}
+function aiTest() {
+  aiCfgGrab();
+  pdNote = "正在测…（最多等十几秒）"; pdErr = ""; sheetRender();
+  pdAsk("这是连通性测试，请只回复两个字：收到", function (ok, txt, how) {
+    if (ok) {
+      pdNote = "通了 · 走的「" + (how === "tavern" ? "酒馆后端" : "直连") + "」· 它回了："
+        + String(txt).replace(/\s+/g, " ").slice(0, 40);
+    } else {
+      pdErr = "没通：" + String(txt || "");
+    }
+    sheetRender();
+  });
+}
+
 function sheetWorld() {
   var ref = wByEid(edW); if (!ref) return "";
   var b = wbFind(ref[0]), e = wbEntry(ref[0], ref[1]); if (!e) return "";
@@ -4247,6 +5118,7 @@ function pReorderSeq(seq) {
   }
   for (i = 0; i < tail.length; i++) if (!seen[tail[i]]) order.push(tail[i]);
   pSortItems();
+  skipRowAnim = true;              /* 拖完只换位置，别让整屏再淡入一次 */
   renderList();
   save("顺序已写回，酒馆里就是这个顺序");
 }
@@ -4292,6 +5164,9 @@ function pgDoInto(gid, newName) {
 var dragCtx = null;
 function dragStart(e) {
   if (!pSort || dragCtx) return;
+  /* ★ 搜索 / 筛选态一律不给拖：那时 DOM 里只有一部分行，拼出来的「新顺序」
+     会把命中行全提到最前、其余全挪到后面（2026-11-19 真机踩过，整份预设顺序被改坏） */
+  if (findQ || tab !== "all") { toast("先把搜索清掉 / 切回「全部」，才能拖顺序"); return; }
   var grip = e.target && e.target.closest ? e.target.closest("[data-grip]") : null;
   if (!grip) return;
   var listEl = QI("list"), row = grip.closest(".row.in");
@@ -4340,7 +5215,13 @@ function dragEnd() {
     pwin.removeEventListener("pointercancel", dragEnd);
   } catch (eX) {}
   if (!ctx.moved) return;
+  /* ★ 再上一道锁：拖完手里的顺序必须是【全量】的。
+     只要有一条带 identifier 的条目没出现在 DOM 里（搜索 / 筛选 / 还没渲染），
+     这一拖就可能把它的位置算丢 —— 宁可不写，也不能写坏。 */
+  var allN = 0;
+  for (var k = 0; k < items.length; k++) if (items[k].identifier) allN++;
   var grips = ctx.list.querySelectorAll(".row.in [data-grip]");
+  if (grips.length !== allN) { toast("顺序没动：列表不是全量（先清掉搜索）"); renderList(); return; }
   var seq = [];
   for (var i = 0; i < grips.length; i++) seq.push(grips[i].getAttribute("data-grip"));
   pReorderSeq(seq);
@@ -4355,6 +5236,73 @@ function pgDelGroup(gid) {
       pgGroups = pgGroups.filter(function (x) { return x.id !== gid; });
       renderList(); save("已解散分组「" + g.name + "」");
     });
+}
+function pgGroupById(gid) {
+  for (var i = 0; i < pgGroups.length; i++) if (pgGroups[i].id === gid) return pgGroups[i];
+  return null;
+}
+/* ── 把选中的条目移出分组（2026-11-19 他要的「移出」）──
+   ★ 只从 members 里拿掉，条目本身不动、顺序也不动（分组只是标签）。 */
+function pgOutSel() {
+  var n = 0;
+  pgGroups.forEach(function (g) {
+    var keep = [];
+    (g.members || []).forEach(function (idf) {
+      if (pgSel[idf]) { n++; return; }
+      keep.push(idf);
+    });
+    g.members = keep;
+  });
+  if (!n) { toast("先点条目左边的框，选中要移出的"); return; }
+  pgSel = {}; renderList();
+  save("已把 " + n + " 条移出分组");
+  toast("已移出 " + n + " 条");
+}
+/* ── 管理分组：改名 / 解散一个 / 全部拆掉 ──
+   ★ 2026-11-19 他原话：「分组也没办法改了」「我想退出分组 我不想要这个分组了 我没找到按钮」。
+     以前只有「收录」和「整个解散」，而且解散的 × 藏在分组标题里，所以他找不到。 */
+function pgMgrOpen() {
+  if (!pgGroups.length) { toast("现在还没有分组"); return; }
+  var h = '<div class="pglist">' + pgGroups.map(function (g) {
+    var n = (g.members || []).length;
+    return '<div class="pgrow">'
+      + '<input class="pgmn" data-pgmname="' + escAttr(g.id) + '" value="' + escAttr(g.name) + '" spellcheck="false">'
+      + '<span class="cnt">' + n + " 条</span>"
+      + '<span class="chip" data-pgmren="' + escAttr(g.id) + '">改名</span>'
+      + '<span class="chip pdanger" data-pgmdel="' + escAttr(g.id) + '">解散</span>'
+      + "</div>";
+  }).join("") + "</div>"
+    + '<div class="pgall"><span class="chip pdanger" data-pgmall="1">全部分组都拆掉</span>'
+    + '<i class="pgnote">只拆分组标签，条目一条都不会少</i></div>';
+  dlgOpen("管理分组", h, null, null);
+  QI("dlgNo").textContent = "关闭";
+}
+function pgMgrRen(gid) {
+  var g = pgGroupById(gid); if (!g) return;
+  var inp = QI("dlgM").querySelector('[data-pgmname="' + gid + '"]');
+  var nm = inp ? String(inp.value || "").trim() : "";
+  if (!nm) { toast("组名不能空着"); return; }
+  if (nm === g.name) { toast("名字没变"); return; }
+  g.name = nm;
+  save("分组改名为「" + nm + "」");
+  renderList();
+  toast("改好了");
+}
+function pgMgrDel(gid) {
+  var g = pgGroupById(gid); if (!g) return;
+  var nm = g.name, cnt = (g.members || []).length;
+  pgGroups = pgGroups.filter(function (x) { return x.id !== gid; });
+  delete pgFold[gid];
+  save("已解散分组「" + nm + "」");
+  renderList(); dlgClose();
+  toast("已解散「" + nm + "」，里面 " + cnt + " 条回到「未分组」");
+}
+function pgMgrClear() {
+  var k = pgGroups.length; if (!k) return;
+  pgGroups = []; pgFold = {}; pgSel = {};
+  save("已拆掉全部 " + k + " 个分组");
+  renderList(); dlgClose();
+  toast("已拆掉全部 " + k + " 个分组（条目一条没少）");
 }
 
 /* =====================================================================
@@ -4405,6 +5353,7 @@ function toggleItem(id) {
   var it = byId(id); if (!it) return;
   if (it.locked) { toast("这条在预设里没有开关，动不了"); return; }
   it.enabled = !it.enabled;
+  skipRowAnim = true;              /* 点个开关不该让整屏重新淡入一遍 */
   renderList(); updStat(true); flashRow(id);
   save((it.enabled ? "已开启「" : "已关闭「") + it.name + "」");
 }
@@ -4976,6 +5925,16 @@ function ordIsGrouped(seq, en) {
   }
   return (on >= 3 && off >= 3) ? { on: on, off: off } : null;
 }
+/* 列表顶上那条「有 N 处待应用的建议」（v3.0）
+   ★ 只在真有东西时出现，而且比「报错条 / 顺序提醒」都靠前 ——
+     那是他自己决定要改的内容，回来第一眼就该看见，不然会以为白弄了。 */
+function pdBarHTML() {
+  var n = pdCount(), tot = pend.length;
+  if (!tot) return "";
+  return '<div class="pdbanner"><span>有 <b>' + n + "</b> 处建议等你确认"
+    + (n < tot ? "（另 " + (tot - n) + " 处没勾）" : "") + '</span>'
+    + '<span class="go" data-aiopen="1">去看</span></div>';
+}
 function ordBarHTML() {
   if (!ordWarn) return "";
   var canFix = !!ordSnapGet(presetName);
@@ -4986,6 +5945,18 @@ function ordBarHTML() {
     +   (canFix ? "" : "（条目和开关一条没少，只是顺序变了）") + "</b>"
     + (canFix ? '<span class="chip" data-ordfix="1">还原成上次的顺序</span>' : "")
     + '<span class="x" data-ordx="1">' + (canFix ? "先不管" : "知道") + "</span>"
+    + "</div>";
+}
+/* 分组模式的顶栏（2026-11-19 他找不到退出：工具行在列表最底下，条目一多就得滚到底）
+   ★ 这颗「退出」必须一直挂在列表顶上，不用滚。 */
+function pgBarHTML() {
+  if (!pGrpMode) return "";
+  var n = pgSelCount();
+  return '<div class="errbar pgbar" data-pgbar="1">'
+    + '<b>分组模式：点条目左边的框选中' + (n ? "（已选 " + n + " 条）" : "") + "</b>"
+    + '<span class="chip" data-pgok="1">收录</span>'
+    + '<span class="chip" data-pgout="1">移出</span>'
+    + '<span class="x" data-pdone="1">退出分组</span>'
     + "</div>";
 }
 function ordFixRun() {
@@ -5109,6 +6080,13 @@ function renderList() {
     /* 顺序自检只对预设页有意义（v2.4）：世界书 / 正则页没有「顺序」这回事 */
     var ob = (view === "preset") ? ordBarHTML() : "";
     if (el && ob) el.insertAdjacentHTML("afterbegin", ob);
+    /* 分组模式的顶栏（2026-11-19）：退出按钮必须不滚就能看见 */
+    var gb = (view === "preset") ? pgBarHTML() : "";
+    if (el && gb) el.insertAdjacentHTML("afterbegin", gb);
+    /* 「有 N 处待应用的建议」（v3.0）：只挂在预设页。
+       它比报错条和顺序提醒都靠前 —— 那是他自己决定要改的东西，得第一眼看见。 */
+    var pb = (view === "preset") ? pdBarHTML() : "";
+    if (el && pb) el.insertAdjacentHTML("afterbegin", pb);
   } catch (e) {}
 }
 function switchView(v) {
@@ -7569,6 +8547,9 @@ function bootResume() {
 function bootUI() {
   if (ls("night", "0") === "1" && host.classList) host.classList.add("night");
   wbGroups = lsJSON("wgrp", []);
+  /* 导入建议的配置 + 待应用清单（v3.0）。必须早于首屏渲染 ——
+     不然列表顶上那条「N 处待应用」第一帧不显示，他会以为东西丢了。 */
+  pdCfgLoad();
   /* 顺序就是命：先球 → 再事件 → 最后数据 */
   bootStepRun("球", orbInit);
   bootStepRun("事件", bindAll);
@@ -7608,6 +8589,13 @@ function bindAll() {
   });
   bootStepRun("头部与搜索", function () {
   QI("pClose").addEventListener("click", closePanel);
+  /* 导入建议 / 体检的入口（v3.0）。用 addEventListener 而不是 hit()，
+     因为它跟搜索 / 夜间那几个顶栏图标是同一类东西，走同一套绑法。 */
+  var paiBtn = QI("pAi");
+  if (paiBtn) paiBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    aiOpen();
+  });
   /* 预设切换小框：点一下列出酒馆里全部预设，选一个直接切 */
   var sw = QI("pSwap");
   if (sw) sw.addEventListener("click", function (e) {
@@ -7669,10 +8657,13 @@ function bindAll() {
     if ((h = hit("data-shback"))) {
       if (edWhich === "f") { favSel = {}; sheetClose(); renderList(); return; }
       if (edWhich === "fr") { sheetClose(); renderList(); return; }   /* 收藏阅读页：返回列表 */
+      /* 导入建议页：只是退出这一页，没勾选的改动留在 pend 里，下次进来接着弄 */
+      if (edWhich === "ai") { sheetClose(); renderList(); updStat(false); return; }
       finishEdit(); return;
     }
     if ((h = hit("data-shok"))) {
       if (edWhich === "f") { favBulkAdd(); return; }
+      if (edWhich === "ai") { sheetClose(); renderList(); updStat(false); return; }
       finishEdit(); toast("已保存"); return;
     }
     /* 编辑页查找条 —— 全部走 data-fact，别用 id 判（重渲染后 id 一样但节点换了） */
@@ -7692,6 +8683,45 @@ function bindAll() {
     /* 列表底部：整体替换 / 撤销 */
     if ((h = hit("data-pbulk"))) { pBulkOpen(); return; }
     if ((h = hit("data-pundo"))) { pUndoDo(); return; }
+    /* ── 导入建议（v3.0）───────────────────────────────────────────
+       ⚠ 这些按钮全在 #sheet 里，而 #sheet 不在 #panel 内 —— 但 onClickCommon
+         本来就同时挂在 panelEl 和 shEl 上，所以这里加一次就够（别再挂第二份）。 */
+    if ((h = hit("data-aitab"))) {
+      pdTab = h.getAttribute("data-aitab"); pdErr = ""; pdNote = "";
+      sheetRender(); return;
+    }
+    if ((h = hit("data-aigo"))) { aiGo(); return; }
+    if ((h = hit("data-pdtog"))) {
+      var pA = pdGet(h.getAttribute("data-pdtog"));
+      if (pA) { pA.on = !pA.on; pdSave(); sheetRender(); }
+      return;
+    }
+    if ((h = hit("data-pddrop"))) {
+      var pdD = h.getAttribute("data-pddrop");
+      pend = pend.filter(function (x) { return x.id !== pdD; });
+      pdSave(); sheetRender(); return;
+    }
+    if ((h = hit("data-aiall"))) {
+      for (var pu = 0; pu < pend.length; pu++) pend[pu].on = true;
+      pdSave(); sheetRender(); return;
+    }
+    if ((h = hit("data-ainone"))) {
+      for (var pv = 0; pv < pend.length; pv++) pend[pv].on = false;
+      pdSave(); sheetRender(); return;
+    }
+    if ((h = hit("data-aiapply"))) {
+      pdApply();
+      if (edWhich === "ai") { if (pend.length) sheetRender(); else sheetClose(); }
+      return;
+    }
+    if ((h = hit("data-aiundo"))) { pdUndoAsk(); return; }
+    if ((h = hit("data-aicfgsave"))) {
+      aiCfgGrab(); pdErr = ""; pdNote = "已保存"; sheetRender(); return;
+    }
+    if ((h = hit("data-aikeyclr"))) {
+      aiCfg.key = ""; pdCfgSave(); pdErr = ""; pdNote = "key 已清掉"; sheetRender(); return;
+    }
+    if ((h = hit("data-aitest"))) { aiTest(); return; }
     if ((h = hit("data-errcopy"))) { errCopy(); return; }
     /* 底栏「名字 · 角色」收/展（v2.5）—— 收起时正文框一直吃到键盘上沿，
        展开时把正文框挤小一点。切完必须重算框高，否则那块空白又回来了。
@@ -7807,6 +8837,8 @@ function bindAll() {
       return;
     }
     if ((h = hit("data-pgdel"))) { pgDelGroup(h.getAttribute("data-pgdel")); return; }
+    if ((h = hit("data-pgout"))) { pgOutSel(); return; }
+    if ((h = hit("data-pgmgr"))) { pgMgrOpen(); return; }
     /* 接口诊断 */
     if ((h = hit("data-probe"))) { probeCopy(); return; }
     /* 导出页 */
@@ -7863,6 +8895,20 @@ function bindAll() {
     /* 全屏页里的「角色」下拉：改完当场自动存 */
     var rl = t.getAttribute("data-role");
     if (rl) { if (draft) draft.role = t.value; else if (editingId) harvestDraft(true); autoSave(); return; }
+    /* 导入建议页：换一条目标条目（用原生 select，手机上虽然有滚轮但最不容易点错） */
+    var ps = t.getAttribute("data-pdsel");
+    if (ps) {
+      var pS = pdGet(ps);
+      if (pS) {
+        pS.idf = t.value;
+        pS.nm = "";
+        pS.conf = t.value ? 1 : 0;      /* 他亲手挑的，就算「对得上」 */
+        pS.on = !!t.value;
+        pdSave(); sheetRender();
+      }
+      return;
+    }
+    if (t.id === "aicCh") { aiCfgGrab(); pdErr = ""; pdNote = "通道已换，记得点「测一下」"; sheetRender(); return; }
   };
   panelEl.addEventListener("change", onChangeCommon);
   if (shEl) shEl.addEventListener("change", onChangeCommon);
@@ -7871,8 +8917,11 @@ function bindAll() {
   /* 收录弹框里的按钮 + 切换预设列表 + 整体替换的分类（弹框不在 panel 里，得单独委托） */
   QI("dlgM").addEventListener("click", function (e) {
     var t = e.target && e.target.closest
-      ? e.target.closest("[data-pginto],[data-pgnewok],[data-preset],[data-bw],[data-bk]") : null;
+      ? e.target.closest("[data-pginto],[data-pgnewok],[data-pgmren],[data-pgmdel],[data-pgmall],[data-preset],[data-bw],[data-bk]") : null;
     if (!t) return;
+    if (t.hasAttribute("data-pgmren")) { pgMgrRen(t.getAttribute("data-pgmren")); return; }
+    if (t.hasAttribute("data-pgmdel")) { pgMgrDel(t.getAttribute("data-pgmdel")); return; }
+    if (t.hasAttribute("data-pgmall")) { pgMgrClear(); return; }
     if (t.hasAttribute("data-bw")) { bulkW = t.getAttribute("data-bw"); pBulkTip(); return; }
     if (t.hasAttribute("data-bk")) { bulkK = t.getAttribute("data-bk"); pBulkTip(); return; }
     if (t.hasAttribute("data-preset")) { dlgClose(); presetSwitch(t.getAttribute("data-preset")); return; }
@@ -7923,6 +8972,26 @@ function bindAll() {
       /* 预设编辑页开着查找条：只刷计数 / mini 那行字，别把滚动位置拽走 */
       if (edWhich === "p" && editingId === id && fBar.on) {
         fTypeLater("frc" + id, function () { if (fBar.on) fRecalc(fBar.hi, true); }, 260);
+      }
+      return;
+    }
+    /* 导入建议页（v3.0）：粘贴框 / 改成什么 / 新名字 —— 边打边进 pend。
+       ⚠ 必须实时收：勾一下任何一条都会 sheetRender 重画整页，
+         不实时收的话刚打的字当场没了（跟编辑页 draft 是同一个道理）。 */
+    if (t.id === "aitxt") { pdTxt = t.value; lsSet(PDK.txt, pdTxt); return; }
+    var pdEid = t.getAttribute("data-pdneo") || t.getAttribute("data-pdnm2");
+    if (pdEid) {
+      var pIt = pdGet(pdEid);
+      if (pIt) {
+        if (t.getAttribute("data-pdneo")) {
+          pIt.neo = t.value;
+          /* 打字时框跟着长高，不然写到第 5 行就看不见了（手机上没法拖右下角） */
+          try {
+            t.style.height = Math.min(240, Math.max(92, (t.scrollHeight || 0) + 2)) + "px";
+          } catch (eH) {}
+        }
+        else pIt.nm2 = t.value;
+        pdSave();
       }
       return;
     }
